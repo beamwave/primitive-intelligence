@@ -32,10 +32,11 @@
 // Yuri, run diagnostics on x.
 // become banker (loan to x, how money does x have)
 // sir you've been on here for 3 hours. Consider (going outside|taking a break)
-// yuri run sentiment analysis
+// yuri tell me a secret
 
 // ------ COMMANDS -------
 // pos mode
+// yuri run sentiment analysis
 // calculate advanced equations
 // how many comments does x have
 // what was x first comment
@@ -108,17 +109,19 @@ $.getScript(
 
 // const setHeader = xhr => {
 //   xhr.setRequestHeader(
-//     'X-AYLIEN-TextAPI-Application-Key',
+//     'Ocp-Apim-Subscription-Key',
 //     'e4ae6f4e9ccb216e81221702181ca5c4'
 //   )
-//   xhr.setRequestHeader('X-AYLIEN-TextAPI-Application-ID', '9efcf12d')
 // }
 
 // ****************** LOW-LEVEL FUNCTIONS ******************
 
 text = {
-  has: (comment, string) => comment.has(`${string}`),
-  notHave: (comment, string) => !comment.has(`${string}`)
+  contains: (comment, ...strings) =>
+    strings.every(string => comment.has(`${string}`)),
+  lacks: (comment, ...strings) =>
+    strings.every(string => !comment.has(`${string}`)),
+  wordsOf: comment => comment.split(' ')
 }
 
 // for todays date
@@ -205,17 +208,17 @@ const writeToChat = (text, delay = 3000, intervalPeriod = 3000) => {
 
     parsed.map((s, i) =>
       console.log(
-        `index: ${i}`,
-        `start: ${i + 2}`,
-        `each delay: ${(i + 3) * 5 * 1000}`,
-        `each second: ${(i + 3) * 5} seconds`
+        `index of text part: ${i}`,
+        `initial delay time: ${i + 2}`,
+        `each subsequent delay: ${(i + 3) * 5 * 1000}`,
+        `interval period in seconds: ${(i + 3) * 5}`
       )
     )
     parsed.map((sentence, i) => textTimeout(sentence, (i + 3) * intervalPeriod))
   }
 }
 
-const sentimentAnalysis = comment => {
+const sentimentAnalysis = comment =>
   $.ajax({
     url:
       'https://cors-escape.herokuapp.com/https://api.aylien.com/api/v1/sentiment',
@@ -226,20 +229,18 @@ const sentimentAnalysis = comment => {
     dataType: 'json',
     success: data => {
       const { polarity, polarity_confidence, subjectivity } = data
-      const text = `The last comment was ${polarity_confidence.toFixed(
-        2
-      )}% ${polarity} and a ${subjectivity} comment.`
-
-      console.log(text)
-      writeToChat(text, 1000)
+      return {
+        polarity,
+        polarity_confidence: +polarity_confidence.toFixed(2),
+        subjectivity
+      }
     },
 
     error: () => {
-      console.log('request failed')
+      console.log('request failed.')
     },
     beforeSend: setSentimentAnalysisHeader
   })
-}
 
 const getUserDataFromMemory = passedInUser =>
   memory.users.filter(
@@ -259,12 +260,14 @@ const checkIfUserIsReferenced = comment =>
 const revokeResponse = username =>
   writeToChat(`Sorry ${username}. Your access is restricted.`)
 
-const respondToComment = () => {
+const respondToComment = (subjectivity, polarity, score) => {
   const currentUser = memory.commentLogs[memory.commentLogs.length - 1].name
   const originalComment = nlp(
     memory.commentLogs[memory.commentLogs.length - 1].comment,
     memory.tags
   )
+
+  // ------------------ SETUP
   const currentUserInfoInMemory = getUserDataFromMemory(currentUser)
   let currentComment = originalComment.clone()
   let mentionedUser
@@ -326,26 +329,21 @@ const respondToComment = () => {
     })
   }
 
+  // ------------------- PARAMS ----------------------
+  const params_fc = {
+    mustHave: ['yuri', 'first comment'],
+    cantHave: ['"']
+  }
+
+  if (state.sentimentMode) {
+    if (currentUser !== memory.self && currentUser !== memory.owner) {
+      const text = `${currentUser}'s comment was ${subjectivity} and ${score *
+        100}% ${polarity}.`
+      writeToChat(text, 500)
+    }
+  }
+
   const mentionedUserInfoInMemory = getUserDataFromMemory(mentionedUser)
-  // console.log("mentioned person's data:")
-  // console.log(mentionedUserInfoInMemory)
-
-  // console.log('current comment:', currentComment.out('text'))
-  // console.log('mentioned user:', mentionedUser)
-
-  // console.log('current user: ', `"${currentUser}"`)
-  // console.log('mentioned user: ', `"${mentionedUser}"`)
-  // console.log('get function: ', getUserDataFromMemory(mentionedUser))
-
-  /*
-    General Commands
-    first comment
-    last comment
-    total comments
-    access level
-    time
-  */
-  sentimentAnalysis(currentComment.out('text'))
 
   // get first comments
   if (
@@ -370,9 +368,8 @@ const respondToComment = () => {
   // get last comments
   if (
     checkIfUserIsReferenced(currentComment) &&
-    currentComment.has('last comment') &&
-    !currentComment.has('"') &&
-    currentComment.has('yuri')
+    text.lacks(currentComment, '"') &&
+    text.contains(currentComment, 'yuri', 'last comment')
   ) {
     if (currentUserInfoInMemory.accessLevel.match(/(1|2)/)) {
       console.log('mentionedUser', mentionedUser)
@@ -723,7 +720,10 @@ const respondToComment = () => {
   }
 
   // read a poem
-  if (currentComment.has('poem') && currentComment.has('yuri')) {
+  if (
+    text.contains(currentComment, 'poem', 'yuri') &&
+    text.wordsOf(currentComment).length < 7
+  ) {
     if (currentUserInfoInMemory.accessLevel.match(/(1|2)/)) {
       $.getJSON(
         `https://cors-escape.herokuapp.com/https://www.poemist.com/api/v1/randompoems`,
@@ -752,7 +752,7 @@ const respondToComment = () => {
               poem.poet.name
             }.`
           )
-          writeToChat(`${poem.content}`, 1000, 7000)
+          writeToChat(`${poem.content}`, 1000, 6000)
         }
       )
     } else if (currentUserInfoInMemory.accessLevel.match(/(3)/)) {
@@ -962,6 +962,24 @@ const respondToComment = () => {
       memory.voicemail = []
     }
 
+    // turn on sentiment analysis mode
+    if (
+      text.contains(currentComment, 'yuri', 'sentiment analysis') &&
+      text.lacks(currentComment, 'deactivate')
+    ) {
+      writeToChat(`Now analyzing user sentiment.`, 2000)
+      setTimeout(() => (state.sentimentMode = true), 2500)
+    }
+
+    // turn off sentiment analysis mode
+    if (text.contains(currentComment, 'yuri', 'analysis', 'deactivate')) {
+      writeToChat(
+        `Deactivating Sentiment Analysis. Sentiments for each user have been recorded sir.`,
+        2000
+      )
+      setTimeout(() => (state.sentimentMode = false), 2500)
+    }
+
     // battery level
     if (
       currentComment.match('/(battery|juice)/').found &&
@@ -971,7 +989,7 @@ const respondToComment = () => {
     }
 
     // backup battery level
-    if (!!currentComment.out('text').match(/back(\s)?up/i)) {
+    if (!!currentComment.out('text').match(/(back(\s)?up|reserve)/i)) {
       writeToChat(`My reserve capacity is at ${state.reserveBatteryLevel}%.`)
     }
 
@@ -1104,17 +1122,32 @@ const respondToComment = () => {
   }
 }
 
-const recordComment = e => {
+const recordComment = async e => {
   const { children: user } = e.target
+  const name = `${user[1].textContent.split('(')[0]}`
+  const comment = `${user[2].textContent}`
+  // const sentiment = await sentimentAnalysis(comment)
+
+  // const { polarity, subjectivity, polarity_confidence } = sentiment
+  // const polarity_score = polarity_confidence.toFixed(2)
+
+  // console.log(sentiment)
 
   memory.commentLogs = [
     ...memory.commentLogs,
     {
-      name: `${user[1].textContent.split('(')[0]}`,
-      comment: `${user[2].textContent}`
+      name,
+      comment
+      // polarity,
+      // subjectivity,
+      // polarity_score
     }
   ]
-  respondToComment()
+  if (state.sentimentMode) {
+    // respondToComment(subjectivity, polarity, polarity_score)
+  } else {
+    respondToComment()
+  }
 }
 
 const calculate = equation => eval(equation)
@@ -1349,7 +1382,8 @@ const state = {
   normalMode: true,
   roastAllMode: false,
   mockUsersMode: false,
-  autopilotMode: false
+  autopilotMode: false,
+  sentimentMode: false
 }
 
 // ****************** COMMANDS ******************

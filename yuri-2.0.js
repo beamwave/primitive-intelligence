@@ -336,24 +336,11 @@ const respondToComment = (subjectivity, polarity, score) => {
   }
 
   const mentionedUserInfoInMemory = getUserDataFromMemory(mentionedUser)
-  // console.log("mentioned person's data:")
-  // console.log(mentionedUserInfoInMemory)
 
-  // console.log('current comment:', currentComment.out('text'))
-  // console.log('mentioned user:', mentionedUser)
-
-  // console.log('current user: ', `"${currentUser}"`)
-  // console.log('mentioned user: ', `"${mentionedUser}"`)
-  // console.log('get function: ', getUserDataFromMemory(mentionedUser))
-
-  /*
-    General Commands
-    first comment
-    last comment
-    total comments
-    access level
-    time
-  */
+  const params_fc = {
+    mustHave: ['yuri', 'first comment'],
+    cantHave: ['"']
+  }
 
   // get first comments
   if (
