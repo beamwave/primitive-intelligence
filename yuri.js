@@ -126,6 +126,7 @@ $.getScript(
 
 // ****************** LOW-LEVEL FUNCTIONS ******************
 
+// with updates!!!!
 text = {
   contains: (comment, ...strings) =>
     strings.every(string => comment.has(`${string}`)),
