@@ -1,5 +1,13 @@
-// remove punctuation
-// .replace(/[~`!@#$%^&*(){}\[\];:"'<,.>?\/\\|_+=-]/g, '')
+/*
+com.echat.shared.chatroom.Controller
+  .isModerator
+  .countUsers()                     // 173
+  .getChatroomStub()
+    .ownerUuid()                    // ie: 91fa549a-898e-4619-9cd6-a6b871707c70
+  .modifyUserContextIfModerator()   // ?
+
+
+*/
 
 // ----- TODO ------
 // yuri help
@@ -75,6 +83,9 @@
 // compromise.js
 $.getScript('https://unpkg.com/compromise@latest/builds/compromise.min.js')
 
+// math.js
+$.getScript('https://cdnjs.cloudflare.com/ajax/libs/mathjs/5.2.0/math.min.js')
+
 // brain.js
 $.getScript('https://cdnjs.cloudflare.com/ajax/libs/brain/0.6.3/brain.min.js')
 
@@ -84,11 +95,10 @@ $.getScript('https://cdnjs.cloudflare.com/ajax/libs/brain/0.6.3/brain.min.js')
 //     console.log(data)
 //   })
 // $.getJSON(
-//   `https://cors-escape.herokuapp.com/https://api.aylien.com/api/v1/sentiment`,
+//   `https://cors-escape.herokuapp.com/https://www.jasonbase.com/things/ZAJz.json`,
 //   data => {
 //     console.log(data)
-//   }
-// )
+//   })
 // $.getJSON(
 //   `https://cors-escape.herokuapp.com/http://en.wikipedia.org/w/api.php?action=query&prop=revisions&rvprop=content&rvsection=0&titles=pizza`,
 //   data => {
@@ -108,6 +118,15 @@ $.getScript('https://cdnjs.cloudflare.com/ajax/libs/brain/0.6.3/brain.min.js')
 //     'e4ae6f4e9ccb216e81221702181ca5c4'
 //   )
 // }
+
+// should make me unbannable
+com.echat.shared.redirect.Controller = {}
+
+const mockRoasts = [
+  'You fucking idiot!',
+  "Don't you ever fucking learn?",
+  'Holy shit, is your bitch ass still speaking?'
+]
 
 // ****************** LOW-LEVEL FUNCTIONS ******************
 
@@ -184,12 +203,42 @@ const setSentimentAnalysisHeader = xhr => {
   xhr.setRequestHeader('X-AYLIEN-TextAPI-Application-ID', '9efcf12d')
 }
 
+// const setRoastHeader = xhr => {
+//   xhr.setRequestHeader(
+//     'secret-key',
+//     '$2a$10$eVNj8x7bMSJ7QA46LctIFekkFoZItaF9aFWinm2kPgTh/3c8Xyueu'
+//   )
+// }
+
+const message = 'make this message variable dynamic'
+
+// echat spammer
+function pmUser(userUuid, message) {
+  console.log('uuid', userUuid, message)
+  $.cometd.publish('/service/conversation/opened', {
+    conversationUserUuid: userUuid
+  })
+  $.cometd.publish('/service/conversation/message', {
+    conversationUserUuid: userUuid,
+    messageBody: message
+  })
+}
+
+com.echat.shared.popup.user.Controller.openUserPopup = function(
+  event,
+  clickedWrapper,
+  userUuid
+) {
+  pmUser(userUuid, message)
+  com.echat.shared.conversation.Controller.closeConversation(event, userUuid)
+}
+
 // ****************** YURI FUNCTIONS ******************
 
 // ?
-const carefullyExecute = (text, conditional) => {
+const carefullyExecute = (text, conditional, delay = 3000) => {
   try {
-    writeToChat(text)
+    writeToChat(text, delay)
   } catch (e) {
     console.log(`Error occurred in ${conditional} check. Details: ${e}`)
     const error = `Unable to fulfill request.`
@@ -239,6 +288,12 @@ const sentimentAnalysis = comment =>
     beforeSend: setSentimentAnalysisHeader
   })
 
+const roast = async () =>
+  await $.getJSON(
+    `https://cors-escape.herokuapp.com/https://www.jasonbase.com/things/ZAJz.json`,
+    data => data
+  )
+
 const getUserDataFromMemory = passedInUser =>
   memory.users.filter(
     user =>
@@ -254,14 +309,6 @@ const checkIfUserIsReferenced = comment =>
       .toLowerCase()
       .includes(key.toLowerCase())
   )
-
-// text = {
-//   contains: (comment, ...strings) =>
-//     strings.every(string => comment.has(`${string}`)),
-//   lacks: (comment, ...strings) =>
-//     strings.every(string => !comment.has(`${string}`)),
-//   wordsOf: comment => comment.split(' ')
-// }
 
 const accessLevelIs = (user, ...levels) =>
   levels.some(level => {
@@ -327,6 +374,17 @@ const checkSentenceFor = (comment, params) => {
     )
       return false
   }
+  if (keys.includes('regexMatchCase')) {
+    if (
+      params.regexMatchCase.every(regexp => {
+        const regex = new RegExp(`${regexp}`, flags[0])
+        const matched = regex.test(comment)
+        // if regex matches comment, return true
+        if (matched) return true
+      }) === false
+    )
+      return false
+  }
 
   if (keys.includes('maxLength')) {
     if (numberOfWords >= params.maxLength) return false
@@ -339,7 +397,7 @@ const checkSentenceFor = (comment, params) => {
 const revokeResponse = username =>
   writeToChat(`Sorry ${username}. Your access is restricted.`)
 
-const respondToComment = (subjectivity, polarity, score) => {
+const respondToComment = async (subjectivity, polarity, score) => {
   const currentUser = memory.commentLogs[memory.commentLogs.length - 1].name
   const originalComment = nlp(
     memory.commentLogs[memory.commentLogs.length - 1].comment,
@@ -352,20 +410,30 @@ const respondToComment = (subjectivity, polarity, score) => {
 
   const allUsers = Object.keys(memory.tags).map(user => ({
     original: user,
-    parsed: user
+    simpleParse: user
       .replace(/[^A-Za-z0-9\s]/g, '')
+      .toLowerCase()
+      .trim(),
+    deepParse: user
+      .replace(/[^A-Za-z\s]/g, '')
       .toLowerCase()
       .trim()
   }))
 
   let mentionedUser
   allUsers.some(name => {
-    if (name.parsed !== 'yuri' && parsedComment.includes(name.parsed)) {
+    if (
+      name.parsed !== 'yuri' &&
+      (parsedComment.includes(name.simpleParse) ||
+        parsedComment.includes(name.deepParse))
+    ) {
       mentionedUser = name.original
       return true
     }
     return false
   })
+
+  console.log('mentioned user', mentionedUser)
 
   const mentionedUserInfoInMemory = getUserDataFromMemory(mentionedUser)
 
@@ -373,70 +441,111 @@ const respondToComment = (subjectivity, polarity, score) => {
 
   // first comment
   const fc_params = {
-    cantHave: ['"'],
-    mustHave: ['yuri', 'first comment']
+    cantHave: [`"`],
+    mustHave: [`yuri`, `first comment`]
   }
 
   // last comment
   const lc_params = {
-    cantHave: ['"'],
-    mustHave: ['yuri', 'last comment']
+    cantHave: [`"`],
+    mustHave: [`yuri`, `last comment`]
   }
 
   // total comments
   const tc_params = {
-    cantHave: ['"'],
-    mustHave: ['yuri'],
-    regexMatch: ['(total|many) comments']
+    cantHave: [`"`],
+    mustHave: [`yuri`],
+    regexMatch: [`(total|many) comments`]
   }
 
   // join time
   const jt_params = {
-    cantHave: ['"'],
-    mustHave: ['yuri'],
-    regexMatch: ['(when|what time)', 'join(?!ed)']
+    cantHave: [`"`],
+    mustHave: [`yuri`],
+    regexMatch: [`(when|what time)`, `join(?!ed)`]
   }
 
   // get time
   const gt_params = {
-    cantHave: ['"', 'join'],
-    mustHave: ['yuri', 'time']
+    cantHave: [`"`, `join`],
+    mustHave: [`yuri`, `time`],
+    maxLength: 5
   }
 
   // get date
   const gd_params = {
-    mustHave: ['yuri', 'date']
+    mustHave: [`yuri`, `date`]
   }
 
   // access level
   const al_params = {
-    cantHave: ['"', 'promote'],
-    mustHave: ['yuri'],
-    regexMatch: ['(access level|permission(s)?)']
+    cantHave: [`"`, `promote`],
+    mustHave: [`yuri`],
+    regexMatch: [`(access level|permission(s)?)`]
   }
 
   // total people
   const tp_params = {
-    cantHave: ['"', 'promote'],
-    mustHave: ['yuri'],
-    regexMatch: ['(access level|permission(s)?)']
+    mustHave: [`yuri`],
+    regexMatch: [`(how many|total( number of)?) (users|people|ppl)`]
   }
 
   // read poem
   const rp_params = {
-    mustHave: ['yuri', 'poem'],
+    mustHave: [`yuri`, `poem`],
     maxLength: 7
   }
 
   // activate sentiment analysis
   const asa_params = {
-    mustHave: ['yuri', 'sentiment analysis'],
-    cantHave: ['deactivate']
+    mustHave: [`yuri`, `sentiment analysis`],
+    cantHave: [`deactivate`]
   }
 
   // deactivate sentiment analysis
   const dsa_params = {
-    mustHave: ['yuri', 'analysis', 'deactivate']
+    mustHave: [`yuri`, `analysis`, `deactivate`]
+  }
+
+  // roast user
+  const ru_params = {
+    mustHave: [`yuri`, `roast`]
+  }
+
+  // yuri
+  const y1_params = {
+    regexMatchCase: [`^(Y|y)uri$`]
+  }
+
+  // yuri?
+  const y2_params = {
+    regexMatchCase: [`^(Y|y)uri( *)[?]$`]
+  }
+
+  // yuri!
+  const y3_params = {
+    regexMatchCase: [`^(Y|y)uri( *)[!]$`]
+  }
+
+  // YURI
+  const y4_params = {
+    regexMatchCase: [`^YURI$`]
+  }
+
+  // activate mock user
+  const amu_params = {
+    mustHave: ['yuri'],
+    regexMatch: [`(every( *)time|(tell|call))`]
+  }
+
+  // deactivate mock user
+  const dmu_params = {
+    mustHave: ['yuri', 'stop', 'monitoring']
+  }
+
+  // math calculation
+  const mc_params = {
+    mustHave: ['yuri', 'calculate']
   }
 
   // --------------- MODES ---------------
@@ -533,7 +642,11 @@ const respondToComment = (subjectivity, polarity, score) => {
       } ${mm} minutes ago at ${
         joinedTimeArr[0] < 12
           ? `${joinedTimeArr[0]}:${joinedTimeArr[1]}am`
-          : `${parseInt(joinedTimeArr[0]) === 12 ? 12 : parseInt(joinedTimeArr[0]) - 12}:${joinedTimeArr[1]}pm`
+          : `${
+              parseInt(joinedTimeArr[0]) === 12
+                ? 12
+                : parseInt(joinedTimeArr[0]) - 12
+            }:${joinedTimeArr[1]}pm`
       }.`
       const conditional = `user joined time`
       carefullyExecute(time, conditional)
@@ -594,63 +707,95 @@ const respondToComment = (subjectivity, polarity, score) => {
   }
 
   // get total people in lobby
+  if (checkSentenceFor(currentComment, tp_params)) {
+    if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
+      const text = `There are currently ${
+        memory.numberOfUsers
+      } users in this room.`
+      const conditional = `total people in lobby`
+      carefullyExecute(text, conditional)
+    } else if (accessLevelIs(currentUserInfoInMemory, 3)) {
+      revokeResponse(currentUser)
+    }
+  }
+
+  // roast user
   if (
-    !!currentComment
-      .out('text')
-      .match(/(how many|total( number of)?) (users|people|ppl)/i) &&
-    currentComment.has('yuri')
+    checkIfUserIsReferenced(currentComment) &&
+    checkSentenceFor(currentComment, ru_params)
   ) {
-    if (currentUserInfoInMemory.accessLevel.match(/(1|2)/)) {
-      writeToChat(
-        `There are currently ${memory.numberOfUsers} users in this room.`
-      )
-    } else if (currentUserInfoInMemory.accessLevel.match(/(3)/)) {
+    if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
+      const data = await roast()
+      const { roasts } = data
+      const max = roasts.length
+      const rand = randomNumber(0, max)
+      const insult = roasts[rand]
+      console.log(insult)
+
+      const text = `${mentionedUser} ${insult}`
+      const conditional = `roast user`
+      carefullyExecute(text, conditional, 0)
+    } else if (accessLevelIs(currentUserInfoInMemory, 3)) {
       revokeResponse(currentUser)
     }
   }
 
   // yuri
-  if (currentComment.out('text').match(/^yuri(?!(\!|\?))$/)) {
+  if (checkSentenceFor(currentComment, y1_params)) {
     if (currentUser === memory.self || currentUser === memory.owner) {
-      writeToChat(`Sir.`)
+      const text = `Sir.`
+      const conditional = `yuri`
+      carefullyExecute(text, conditional)
     } else {
-      writeToChat(`${currentUser}.`)
+      const text = `${currentUser}.`
+      const conditional = `yuri`
+      carefullyExecute(text, conditional)
     }
   }
 
   // yuri?
-  if (currentComment.out('text').match(/^yuri[\s]*\?$/i)) {
+  if (checkSentenceFor(currentComment, y2_params)) {
     if (currentUser === memory.self || currentUser === memory.owner) {
-      writeToChat(`Sir?`)
+      const text = `Sir?`
+      const conditional = `yuri?`
+      carefullyExecute(text, conditional)
     } else {
-      writeToChat(`${currentUser}?`)
+      const text = `${currentUser}?`
+      const conditional = `yuri?`
+      carefullyExecute(text, conditional)
     }
   }
 
   // yuri!
-  if (currentComment.out('text').match(/^yuri[\s]*\!+$/i)) {
+  if (checkSentenceFor(currentComment, y3_params)) {
     if (currentUser === memory.self || currentUser === memory.owner) {
-      writeToChat(`Sir! Why are you yelling?`)
+      const text = `Sir! Why are you yelling!`
+      const conditional = `yuri! Why are you yelling!`
+      carefullyExecute(text, conditional)
     } else {
-      writeToChat(`${currentUser}. Why are you yelling?`)
+      const text = `${currentUser}! Why are you yelling!`
+      const conditional = `yuri! Why are you yelling!`
+      carefullyExecute(text, conditional)
     }
   }
 
   // YURI
-  if (currentComment.out('text').match(/^YURI(?!(\!|\?))$/)) {
+  if (checkSentenceFor(currentComment, y4_params)) {
     if (currentUser === memory.self || currentUser === memory.owner) {
-      writeToChat(`SIR! WHY ARE YOU SCREAMING`)
+      const text = `SIR! WHY ARE YOU SCREAMING.`
+      const conditional = `SIR! WHY ARE YOU SCREAMING.`
+      carefullyExecute(text, conditional)
     } else {
-      writeToChat(`${currentUser}! WHY ARE YOU SCREAMING`)
+      const text = `${currentUser}! WHY ARE YOU SCREAMING.`
+      const conditional = `${currentUser}! WHY ARE YOU SCREAMING.`
+      carefullyExecute(text, conditional)
     }
   }
 
   // everytime user speaks, tell them something
   if (
-    currentComment.out('text').match(/(every(\s)?time|(tell|call))/i) &&
-    currentComment.match('(speaks|talks)') &&
     checkIfUserIsReferenced(currentComment) &&
-    currentComment.has('yuri')
+    checkSentenceFor(currentComment, amu_params)
   ) {
     const pronouns = currentComment
       .match(
@@ -668,36 +813,34 @@ const respondToComment = (subjectivity, polarity, score) => {
       }
       console.log(memory.grillSpecificUser)
 
-      writeToChat(
-        `Will do, Sir. Now monitoring ${mentionedUser}'s speech patterns.`
-      )
+      const text = `Will do, Sir. Now monitoring ${mentionedUser}'s speech patterns.`
+      const conditional = `mock user`
+      carefullyExecute(text, conditional)
     } else {
-      if (currentUserInfoInMemory.accessLevel.match(/(1|2)/)) {
+      if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
         memory.grillSpecificUser = {
           status: true,
           victim: mentionedUser,
           speech: command[1].replace('my', ` ${currentUser}'s `),
           count: 0
         }
-        writeToChat(`Will do ${currentUser}.`)
-      } else if (currentUserInfoInMemory.accessLevel.match(/(3)/)) {
-        revokeResponse(currentUser)
+        const text = `Will do ${currentUser}.`
+        const conditional = `mock user`
+        carefullyExecute(text, conditional)
+        if (accessLevelIs(currentUserInfoInMemory, 3)) {
+          revokeResponse(currentUser)
+        }
       }
     }
   }
 
   // stop responding to user
-  if (
-    currentComment.has('stop') &&
-    currentComment.has('monitoring') &&
-    currentComment.has('yuri')
-  ) {
+  if (checkSentenceFor(currentComment, dmu_params)) {
+    const { victim } = memory.grillSpecificUser
     if (currentUser === memory.self || currentUser === memory.owner) {
-      writeToChat(
-        `I've stopped monitoring ${
-          memory.grillSpecificUser.victim
-        }'s speech patterns sir.`
-      )
+      const text = `I've stopped monitoring ${victim}'s speech patterns sir.`
+      const conditional = `stop mocking user`
+      carefullyExecute(text, conditional)
       memory.grillSpecificUser = {
         status: false,
         victim: '',
@@ -705,34 +848,32 @@ const respondToComment = (subjectivity, polarity, score) => {
         count: 0
       }
     } else {
-      if (currentUserInfoInMemory.accessLevel.match(/(1|2)/)) {
-        writeToChat(
-          `I've stopped monitoring ${
-            memory.grillSpecificUser.victim
-          }'s speech patterns ${currentUser}.`
-        )
+      if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
+        const text = `I've stopped monitoring ${victim}'s speech patterns ${currentUser}.`
+        const conditional = `stop mocking user`
+        carefullyExecute(text, conditional)
         memory.grillSpecificUser = {
           status: false,
           victim: '',
           speech: '',
           count: 0
         }
-      } else if (currentUserInfoInMemory.accessLevel.match(/(3)/)) {
+      } else if (accessLevelIs(currentUserInfoInMemory, 3)) {
         revokeResponse(currentUser)
       }
     }
   }
 
   // run math calculation
-  if (currentComment.has('calculate') && currentComment.has('yuri')) {
-    if (currentUserInfoInMemory.accessLevel.match(/(1|2)/)) {
-      const math = currentComment
-        .after('calculate')
-        .out('text')
-        .replace(/\^/g, '**')
-      console.log('math', math)
-      writeToChat(`The results are ${yuri.calculate(math)}.`)
-    } else if (currentUserInfoInMemory.accessLevel.match(/(3)/)) {
+  if (checkSentenceFor(currentComment, mc_params)) {
+    if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
+      const comment = currentComment.out('text')
+      const expression = comment.split('calculate')[1]
+      const result = math.eval(expression)
+      const text = `The answer is ${result}.`
+      const conditional = `math calculation`
+      carefullyExecute(text, conditional)
+    } else if (accessLevelIs(currentUserInfoInMemory, 3)) {
       revokeResponse(currentUser)
     }
   }
