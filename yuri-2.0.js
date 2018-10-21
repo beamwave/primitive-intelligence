@@ -127,11 +127,10 @@ Date.prototype.dateNow = function() {
 // for the time now
 Date.prototype.timeNow = function() {
   return (
-    (this.getHours() < 12 ? this.getHours() : this.getHours() - 12) +
+    (this.getHours() <= 12 ? this.getHours() : this.getHours() - 12) +
     ':' +
     (this.getMinutes() < 10 ? '0' : '') +
     this.getMinutes() +
-    ':' +
     (this.getHours() < 12 ? 'am' : 'pm')
   )
 }
@@ -189,7 +188,6 @@ const setSentimentAnalysisHeader = xhr => {
 
 // ?
 const carefullyExecute = (text, conditional) => {
-  console.log('now carefully executing', text)
   try {
     writeToChat(text)
   } catch (e) {
@@ -244,6 +242,7 @@ const sentimentAnalysis = comment =>
 const getUserDataFromMemory = passedInUser =>
   memory.users.filter(
     user =>
+      passedInUser !== undefined &&
       user.username.toLowerCase().trim() === passedInUser.toLowerCase().trim()
   )[0]
 
@@ -276,66 +275,65 @@ const checkSentenceFor = (comment, params) => {
   comment = comment.out('text')
   const numberOfWords = comment.split(' ')
 
-  // console.log(word)
-  console.log(comment)
-  console.log(params.mustHave)
-  // console.log('matched', comment.match(regex))
-
   // determine sentence checks
   const keys = Object.keys(params).map(key => key)
   const flags = 'gi'
 
   if (keys.includes('startsWith')) {
     const regex = new RegExp($`^${params.startsWith}`, flags[1])
-    if (!comment.match(regex)) return false
+    const matched = regex.test(comment)
+    if (!matched) return false
   }
-  console.log('1')
+
   if (keys.includes('endsWith')) {
     const regex = new RegExp(`${params.endsWith}$`, flags[1])
-    if (!comment.match(regex)) return false
+    const matched = regex.test(comment)
+    if (!matched) return false
   }
-  console.log('2')
+
   if (keys.includes('mustHave')) {
     // for every word
     if (
       params.mustHave.every(word => {
         const regex = new RegExp(`${word}`, flags)
+        const matched = regex.test(comment)
         // if word is not found in sentence, break from function
-        if (!comment.match(regex)) return false
+        if (matched) return true
       }) === false
     )
       return false
-    }
-    if (keys.includes('cantHave')) {
-      if (
-        // if sentence has any of these words, break from function
-        params.cantHave.some(word => {
-          const regex = new RegExp(`${word}`, flags)
-          if (comment.match(regex)) return false
-        }) === true
-      )
-        return false
-    }
-
-    if (keys.includes('regexMatch')) {
-      if (
-        params.regexMatch.every(regexp => {
-          const regex = new RegExp(`${regexp}`, flags)
-          // if word is not found in sentence, break from function
-          if (!comment.match(regex)) return false
-        }) === false
-      )
-        return false
-    }
-
-    if (keys.includes('maxLength')) {
-      if (numberOfWords >= params.maxLength) return false
-    }
-
-    console.log('made it to bottom.')
-    // else return true and enter conditional
-    return true
   }
+
+  if (keys.includes('cantHave')) {
+    if (
+      // if sentence has any of these words, break from function
+      params.cantHave.some(word => {
+        const regex = new RegExp(`${word}`, flags)
+        const matched = regex.test(comment)
+        if (matched) return false
+      }) === true
+    )
+      return false
+  }
+
+  if (keys.includes('regexMatch')) {
+    if (
+      params.regexMatch.every(regexp => {
+        const regex = new RegExp(`${regexp}`, flags)
+        const matched = regex.test(comment)
+        // if regex matches comment, return true
+        if (matched) return true
+      }) === false
+    )
+      return false
+  }
+
+  if (keys.includes('maxLength')) {
+    if (numberOfWords >= params.maxLength) return false
+  }
+
+  // else return true and enter conditional
+  return true
 }
 
 const revokeResponse = username =>
@@ -349,72 +347,27 @@ const respondToComment = (subjectivity, polarity, score) => {
   )
   const currentUserInfoInMemory = getUserDataFromMemory(currentUser)
   let currentComment = originalComment.clone()
-  let mentionedUser
-  mentionedUser =
-    currentComment
-      .not('yuri')
-      .match('#Username')
-      .out('text')
-      .replace(/\'s$/, '')
-      .replace(/[~`!@#$%^&*(){}\[\];:"'<,.>?\/\\|_+=-]/g, '')
-      .trim() ||
-    currentComment
-      .not('yuri')
-      .match('#Username')
-      .out('text')
-      .replace(/(s)?$/, '')
-      .replace(/[~`!@#$%^&*(){}\[\];:"'<,.>?\/\\|_+=-]/g, '')
-      .trim() ||
-    currentComment
-      .not('yuri')
-      .match('#Username')
-      .out('text')
-      .replace(/\'s$/, '')
-      .replace(/[~`!@#$%^&*(){}\[\];:"'<,.>?\/\\|_+=-]/g, '')
-      .trim()
+  const comment = currentComment.out('text')
+  const parsedComment = comment.replace(/[^A-Za-z0-9\s]/g, '').toLowerCase()
 
-  if (!mentionedUser) {
-    Object.keys(memory.tags).some(key => {
-      if (
-        currentComment
-          .out('text')
-          .toLowerCase()
-          .includes(key.toLowerCase()) ||
-        currentComment
-          .out('text')
-          .toLowerCase()
-          .replace(/(')?s$/, '')
-          .includes(key.toLowerCase()) ||
-        currentComment
-          .out('text')
-          .toLowerCase()
-          .replace(/(')?s$/, '')
-          .replace(/[~`!@#$%^&*(){}\[\];:"'<,.>?\/\\|_+=-]/g, '')
-          .includes(
-            key
-              .toLowerCase()
-              .replace(/[~`!@#$%^&*(){}\[\];:"'<,.>?\/\\|_+=-]/g, '')
-          )
-      ) {
-        console.log('using key assignment.')
-        mentionedUser = key
-          .toLowerCase()
-          .trim()
-          .replace(/(')?s$/, '')
-          .replace(/[~`!@#$%^&*(){}\[\];:"'<,.>?\/\\|_+=-]/g, '')
-        return true
-      }
-      return false
-    })
-  }
+  const allUsers = Object.keys(memory.tags).map(user => ({
+    original: user,
+    parsed: user
+      .replace(/[^A-Za-z0-9\s]/g, '')
+      .toLowerCase()
+      .trim()
+  }))
+
+  let mentionedUser
+  allUsers.some(name => {
+    if (name.parsed !== 'yuri' && parsedComment.includes(name.parsed)) {
+      mentionedUser = name.original
+      return true
+    }
+    return false
+  })
 
   const mentionedUserInfoInMemory = getUserDataFromMemory(mentionedUser)
-
-  // checkIfUserIsReferenced(currentComment) &&
-  // currentComment.match('(when|what time)').found &&
-  // currentComment.match('join!ed') &&
-  // !currentComment.has('"') &&
-  // currentComment.has('yuri')
 
   // --------------- PARAMS ---------------
 
@@ -440,14 +393,9 @@ const respondToComment = (subjectivity, polarity, score) => {
   // join time
   const jt_params = {
     cantHave: ['"'],
-    mustHave: ['yuri', 'last comment'],
+    mustHave: ['yuri'],
     regexMatch: ['(when|what time)', 'join(?!ed)']
   }
-
-  // currentComment.has('time') &&
-  // !currentComment.has('join') &&
-  // !currentComment.not('yuri').has('#Username') &&
-  // currentComment.has('yuri')
 
   // get time
   const gt_params = {
@@ -509,7 +457,6 @@ const respondToComment = (subjectivity, polarity, score) => {
     checkSentenceFor(currentComment, fc_params)
   ) {
     if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
-      console.log('entry..')
       const { username, firstComment } = mentionedUserInfoInMemory
       const text = `${username}'s first comment was "${firstComment}"`
       const conditional = `first comment`
@@ -540,12 +487,17 @@ const respondToComment = (subjectivity, polarity, score) => {
     checkSentenceFor(currentComment, tc_params)
   ) {
     if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
-      const {
-        numberOfCommentsFromThisUser: totalComments
-      } = mentionedUserInfoInMemory
-      const text = `${mentionedUser} has written ${totalComments} total comments.`
       const conditional = 'total comments'
-      carefullyExecute = (text, conditional)
+      try {
+        const {
+          numberOfCommentsFromThisUser: totalComments
+        } = mentionedUserInfoInMemory
+        const text = `${mentionedUser} has written ${totalComments} total comments.`
+        carefullyExecute(text, conditional)
+      } catch (err) {
+        const text = `Sir. I could not find that user.`
+        carefullyExecute(text, conditional)
+      }
     } else if (accessLevelIs(currentUserInfoInMemory, 3)) {
       revokeResponse(currentUser)
     }
@@ -574,12 +526,14 @@ const respondToComment = (subjectivity, polarity, score) => {
       const mm = Math.floor(timespan / 1000 / 60)
       timespan -= mm * 1000 * 60
 
+      console.log('joined time array:', joinedTimeArr)
+
       const time = `Sir, my earliest records indicate that ${mentionedUser} joined approximately${
         hh > 0 ? ` ${hh} hour${hh > 1 ? `s` : ``} and` : ``
       } ${mm} minutes ago at ${
         joinedTimeArr[0] < 12
           ? `${joinedTimeArr[0]}:${joinedTimeArr[1]}am`
-          : `${joinedTimeArr[0] - 12}:${joinedTimeArr[1]}pm`
+          : `${parseInt(joinedTimeArr[0]) === 12 ? 12 : parseInt(joinedTimeArr[0]) - 12}:${joinedTimeArr[1]}pm`
       }.`
       const conditional = `user joined time`
       carefullyExecute(time, conditional)
@@ -665,7 +619,7 @@ const respondToComment = (subjectivity, polarity, score) => {
   }
 
   // yuri?
-  if (currentComment.out('text').match(/^yuri\?$/)) {
+  if (currentComment.out('text').match(/^yuri[\s]*\?$/i)) {
     if (currentUser === memory.self || currentUser === memory.owner) {
       writeToChat(`Sir?`)
     } else {
@@ -674,7 +628,7 @@ const respondToComment = (subjectivity, polarity, score) => {
   }
 
   // yuri!
-  if (currentComment.out('text').match(/^yuri\!$/)) {
+  if (currentComment.out('text').match(/^yuri[\s]*\!+$/i)) {
     if (currentUser === memory.self || currentUser === memory.owner) {
       writeToChat(`Sir! Why are you yelling?`)
     } else {

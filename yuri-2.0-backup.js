@@ -1135,14 +1135,13 @@ const recordComment = async e => {
 
   // const { polarity, subjectivity, polarity_confidence } = sentiment
   // const polarity_score = polarity_confidence.toFixed(2)
-
   // console.log(sentiment)
 
   memory.commentLogs = [
     ...memory.commentLogs,
     {
       name,
-      comment
+      comment,
       // polarity,
       // subjectivity,
       // polarity_score

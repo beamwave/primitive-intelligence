@@ -230,7 +230,7 @@ begin = () => {
 // yuri
 
 const myUsername = document.querySelector('#HeaderUsername').textContent
-const testAccount = 'The Dipole Repeller'
+const testAccount = 'Secret Agent X-9'
 let operational = true
 blockingAll = false
 mocking = false
@@ -467,6 +467,7 @@ const quotes = [
 ]
 
 const roasts = [
+  ' you need to be fucked like a bitch. Or you suck on these nuts and lick the dick. Citation.', 
   ' you ugly fucking stupid moron. The greatest fucking degenerate known to mankind. Get fucked you smelly cunt.',
   ' open your mouth again—my cock is homesick you silly, silly little boy.',
   " yo mama so fat when the doc checked her weight he was like holy fuck that's my phone number.",
@@ -475,7 +476,7 @@ const roasts = [
   " you tiki-torch carrying larper. You're fake. You're dumb as shit.",
   ' we know you sanitize your hands with the brown bars of soap that fall from your butt. Stop playing games.',
   ' suck a cock you fucking fag',
-  ' i dont like you. you remind me of james bond the faggot',
+  ' I dont like you. You remind me of james bond the faggot.',
   ' you are wholly uninteresting and a textbook retard. There may be hope for you but I doubt it.',
   '... listen mate, I think you need to go suck on a bag of clams you afroheaded bore.',
   " all you can say is that you're a cocksucker. Be honest with the world you opportunistic muppet, your mouth is a cock holster, and your throat is an orphanage. You even smell like sperm you dirt eating piece of slime.",
@@ -774,7 +775,7 @@ const interact = e => {
   const lastUserText = e.target.children[2].textContent
 
   const greetRe = /yuri(,)? (greet the lobby|(why dont you )?introduce yourself( to every(one|body))?)/i
-  const activateRe = /(yuri(,)? turn on|turn on yuri|activate yuri|wake up yuri)/i
+  const activateRe = /(yuri(,)? turn on|turn on yuri|activate yuri|wake up yuri| yuri wake up)/i
   const shutdownRe = /(yuri(,)? go to sleep|shutdown yuri|yuri(,)?( please)? power down|power down(,)?( for now)? yuri|yuri(,)? turn off| turn off yuri)/i
   const logsRe = /(yuri(,)?)?(\sstatus report|\s(show )?logs|\sstats)/
   const survivalRe = /((con|pre)serve( your)? (power|battery)|survival protocol)/i
