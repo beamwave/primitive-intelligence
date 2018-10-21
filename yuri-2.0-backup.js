@@ -632,9 +632,14 @@ const respondToComment = (subjectivity, polarity, score) => {
   if (currentComment.has('calculate') && currentComment.has('yuri')) {
     if (currentUserInfoInMemory.accessLevel.match(/(1|2)/)) {
       const math = currentComment
-        .after('calculate')
         .out('text')
+        .split('calculate')[1]
         .replace(/\^/g, '**')
+        .trim()
+      // const math = currentComment
+      //   .after('calculate')
+      //   .out('text')
+      //   .replace(/\^/g, '**').trim()
       console.log('math', math)
       writeToChat(`The results are ${yuri.calculate(math)}.`)
     } else if (currentUserInfoInMemory.accessLevel.match(/(3)/)) {
@@ -722,7 +727,7 @@ const respondToComment = (subjectivity, polarity, score) => {
   // read a poem
   if (
     text.contains(currentComment, 'poem', 'yuri') &&
-    text.wordsOf(currentComment).length < 7
+    text.wordsOf(currentComment.out('text')).length < 7
   ) {
     if (currentUserInfoInMemory.accessLevel.match(/(1|2)/)) {
       $.getJSON(

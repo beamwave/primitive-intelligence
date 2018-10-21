@@ -78,11 +78,6 @@ $.getScript('https://unpkg.com/compromise@latest/builds/compromise.min.js')
 // brain.js
 $.getScript('https://cdnjs.cloudflare.com/ajax/libs/brain/0.6.3/brain.min.js')
 
-// moment.js
-$.getScript(
-  'https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.22.2/locale/ar-dz.js'
-)
-
 // $.getJSON(
 //   `https://cors-escape.herokuapp.com/...`,
 //   data => {
@@ -115,14 +110,6 @@ $.getScript(
 // }
 
 // ****************** LOW-LEVEL FUNCTIONS ******************
-
-text = {
-  contains: (comment, ...strings) =>
-    strings.every(string => comment.has(`${string}`)),
-  lacks: (comment, ...strings) =>
-    strings.every(string => !comment.has(`${string}`)),
-  wordsOf: comment => comment.split(' ')
-}
 
 // for todays date
 Date.prototype.dateNow = function() {
@@ -200,6 +187,18 @@ const setSentimentAnalysisHeader = xhr => {
 
 // ****************** YURI FUNCTIONS ******************
 
+// ?
+const carefullyExecute = (text, conditional) => {
+  console.log('now carefully executing', text)
+  try {
+    writeToChat(text)
+  } catch (e) {
+    console.log(`Error occurred in ${conditional} check. Details: ${e}`)
+    const error = `Unable to fulfill request.`
+    writeToChat(error)
+  }
+}
+
 const writeToChat = (text, delay = 3000, intervalPeriod = 3000) => {
   if (text.length < 200) {
     textTimeout(text, delay)
@@ -256,6 +255,88 @@ const checkIfUserIsReferenced = comment =>
       .toLowerCase()
       .includes(key.toLowerCase())
   )
+
+// text = {
+//   contains: (comment, ...strings) =>
+//     strings.every(string => comment.has(`${string}`)),
+//   lacks: (comment, ...strings) =>
+//     strings.every(string => !comment.has(`${string}`)),
+//   wordsOf: comment => comment.split(' ')
+// }
+
+const accessLevelIs = (user, ...levels) =>
+  levels.some(level => {
+    const flags = 'gi'
+    const regex = new RegExp(`${level}`, flags)
+    return !!user.accessLevel.match(regex)
+  })
+
+const checkSentenceFor = (comment, params) => {
+  // convert from npl to text
+  comment = comment.out('text')
+  const numberOfWords = comment.split(' ')
+
+  // console.log(word)
+  console.log(comment)
+  console.log(params.mustHave)
+  // console.log('matched', comment.match(regex))
+
+  // determine sentence checks
+  const keys = Object.keys(params).map(key => key)
+  const flags = 'gi'
+
+  if (keys.includes('startsWith')) {
+    const regex = new RegExp($`^${params.startsWith}`, flags[1])
+    if (!comment.match(regex)) return false
+  }
+  console.log('1')
+  if (keys.includes('endsWith')) {
+    const regex = new RegExp(`${params.endsWith}$`, flags[1])
+    if (!comment.match(regex)) return false
+  }
+  console.log('2')
+  if (keys.includes('mustHave')) {
+    // for every word
+    if (
+      params.mustHave.every(word => {
+        const regex = new RegExp(`${word}`, flags)
+        // if word is not found in sentence, break from function
+        if (!comment.match(regex)) return false
+      }) === false
+    )
+      return false
+    }
+    if (keys.includes('cantHave')) {
+      if (
+        // if sentence has any of these words, break from function
+        params.cantHave.some(word => {
+          const regex = new RegExp(`${word}`, flags)
+          if (comment.match(regex)) return false
+        }) === true
+      )
+        return false
+    }
+
+    if (keys.includes('regexMatch')) {
+      if (
+        params.regexMatch.every(regexp => {
+          const regex = new RegExp(`${regexp}`, flags)
+          // if word is not found in sentence, break from function
+          if (!comment.match(regex)) return false
+        }) === false
+      )
+        return false
+    }
+
+    if (keys.includes('maxLength')) {
+      if (numberOfWords >= params.maxLength) return false
+    }
+
+    console.log('made it to bottom.')
+    // else return true and enter conditional
+    return true
+  }
+}
 
 const revokeResponse = username =>
   writeToChat(`Sorry ${username}. Your access is restricted.`)
@@ -327,6 +408,91 @@ const respondToComment = (subjectivity, polarity, score) => {
     })
   }
 
+  const mentionedUserInfoInMemory = getUserDataFromMemory(mentionedUser)
+
+  // checkIfUserIsReferenced(currentComment) &&
+  // currentComment.match('(when|what time)').found &&
+  // currentComment.match('join!ed') &&
+  // !currentComment.has('"') &&
+  // currentComment.has('yuri')
+
+  // --------------- PARAMS ---------------
+
+  // first comment
+  const fc_params = {
+    cantHave: ['"'],
+    mustHave: ['yuri', 'first comment']
+  }
+
+  // last comment
+  const lc_params = {
+    cantHave: ['"'],
+    mustHave: ['yuri', 'last comment']
+  }
+
+  // total comments
+  const tc_params = {
+    cantHave: ['"'],
+    mustHave: ['yuri'],
+    regexMatch: ['(total|many) comments']
+  }
+
+  // join time
+  const jt_params = {
+    cantHave: ['"'],
+    mustHave: ['yuri', 'last comment'],
+    regexMatch: ['(when|what time)', 'join(?!ed)']
+  }
+
+  // currentComment.has('time') &&
+  // !currentComment.has('join') &&
+  // !currentComment.not('yuri').has('#Username') &&
+  // currentComment.has('yuri')
+
+  // get time
+  const gt_params = {
+    cantHave: ['"', 'join'],
+    mustHave: ['yuri', 'time']
+  }
+
+  // get date
+  const gd_params = {
+    mustHave: ['yuri', 'date']
+  }
+
+  // access level
+  const al_params = {
+    cantHave: ['"', 'promote'],
+    mustHave: ['yuri'],
+    regexMatch: ['(access level|permission(s)?)']
+  }
+
+  // total people
+  const tp_params = {
+    cantHave: ['"', 'promote'],
+    mustHave: ['yuri'],
+    regexMatch: ['(access level|permission(s)?)']
+  }
+
+  // read poem
+  const rp_params = {
+    mustHave: ['yuri', 'poem'],
+    maxLength: 7
+  }
+
+  // activate sentiment analysis
+  const asa_params = {
+    mustHave: ['yuri', 'sentiment analysis'],
+    cantHave: ['deactivate']
+  }
+
+  // deactivate sentiment analysis
+  const dsa_params = {
+    mustHave: ['yuri', 'analysis', 'deactivate']
+  }
+
+  // --------------- MODES ---------------
+
   if (state.sentimentMode) {
     if (currentUser !== memory.self && currentUser !== memory.owner) {
       const text = `${currentUser}'s comment was ${subjectivity} and ${score *
@@ -335,92 +501,35 @@ const respondToComment = (subjectivity, polarity, score) => {
     }
   }
 
-  const mentionedUserInfoInMemory = getUserDataFromMemory(mentionedUser)
+  // --------------- ACTIONS ---------------
 
-  const params_fc = {
-    mustHave: ['yuri', 'first comment'],
-    cantHave: ['"']
-  }
-
-  // get first comments
+  // get users first comment
   if (
     checkIfUserIsReferenced(currentComment) &&
-    currentComment.has('first comment') &&
-    !currentComment.has('"') &&
-    currentComment.has('yuri')
+    checkSentenceFor(currentComment, fc_params)
   ) {
-    console.log('yuri before you speak, what is in it:')
-    console.log(mentionedUserInfoInMemory)
-    if (currentUserInfoInMemory.accessLevel.match(/(1|2)/)) {
-      writeToChat(
-        `${mentionedUserInfoInMemory.username}'s first comment was "${
-          mentionedUserInfoInMemory.firstComment
-        }"`
-      )
-    } else if (currentUserInfoInMemory.accessLevel.match(/(3)/)) {
+    if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
+      console.log('entry..')
+      const { username, firstComment } = mentionedUserInfoInMemory
+      const text = `${username}'s first comment was "${firstComment}"`
+      const conditional = `first comment`
+      carefullyExecute(text, conditional)
+    } else if (accessLevelIs(currentUserInfoInMemory, 3)) {
       revokeResponse(currentUser)
     }
   }
 
-  // get last comments
+  // get users last comment
   if (
     checkIfUserIsReferenced(currentComment) &&
-    text.lacks(currentComment, '"') &&
-    text.contains(currentComment, 'yuri', 'last comment')
+    checkSentenceFor(currentComment, lc_params)
   ) {
-    if (currentUserInfoInMemory.accessLevel.match(/(1|2)/)) {
-      console.log('mentionedUser', mentionedUser)
-      console.log(
-        'getUserDataFromMemory(mentionedUser)',
-        mentionedUserInfoInMemory
-      )
-      writeToChat(
-        `${mentionedUser}'s last comment was "${
-          mentionedUserInfoInMemory.lastComment
-        }"`
-      )
-    } else if (currentUserInfoInMemory.accessLevel.match(/(3)/)) {
-      revokeResponse(currentUser)
-    }
-  }
-
-  // get join time
-  if (
-    checkIfUserIsReferenced(currentComment) &&
-    currentComment.match('(when|what time)').found &&
-    currentComment.match('join!ed') &&
-    !currentComment.has('"') &&
-    currentComment.has('yuri')
-  ) {
-    if (currentUserInfoInMemory.accessLevel.match(/(1|2)/)) {
-      const joinedTime = mentionedUserInfoInMemory.timeJoined
-      const joinedTimeArr = joinedTime.split(':')
-
-      const before = new Date().setHours(joinedTimeArr[0], joinedTimeArr[1]) // 1539630794517
-      const now = new Date()
-
-      if (now < before) {
-        now.setDate(now.getDate() + 1)
-      }
-
-      const interval = now - before
-
-      let timespan = interval
-      let hh = Math.floor(timespan / 1000 / 60 / 60)
-      timespan -= hh * 1000 * 60 * 60
-      let mm = Math.floor(timespan / 1000 / 60)
-      timespan -= mm * 1000 * 60
-
-      time = `Sir, my earliest records indicate that ${mentionedUser} joined approximately${
-        hh > 0 ? ` ${hh} hour${hh > 1 ? `s` : ``} and` : ``
-      } ${mm} minutes ago at ${
-        joinedTimeArr[0] < 12
-          ? `${joinedTimeArr[0]}:${joinedTimeArr[1]}am`
-          : `${joinedTimeArr[0] - 12}:${joinedTimeArr[1]}pm`
-      }.`
-
-      writeToChat(time)
-    } else if (currentUserInfoInMemory.accessLevel.match(/(3)/)) {
+    if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
+      const { lastComment } = mentionedUserInfoInMemory
+      const text = `${mentionedUser}'s last comment was "${lastComment}"`
+      const conditional = `last comment`
+      carefullyExecute(text, conditional)
+    } else if (accessLevelIs(currentUserInfoInMemory, 3)) {
       revokeResponse(currentUser)
     }
   }
@@ -428,17 +537,53 @@ const respondToComment = (subjectivity, polarity, score) => {
   // get users total comments
   if (
     checkIfUserIsReferenced(currentComment) &&
-    currentComment.has('(total|many) comments') &&
-    !currentComment.has('"') &&
-    currentComment.has('yuri')
+    checkSentenceFor(currentComment, tc_params)
   ) {
-    if (currentUserInfoInMemory.accessLevel.match(/(1|2)/)) {
-      writeToChat(
-        `${mentionedUser} has written ${
-          mentionedUserInfoInMemory.numberOfCommentsFromThisUser
-        } total comments.`
-      )
-    } else if (currentUserInfoInMemory.accessLevel.match(/(3)/)) {
+    if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
+      const {
+        numberOfCommentsFromThisUser: totalComments
+      } = mentionedUserInfoInMemory
+      const text = `${mentionedUser} has written ${totalComments} total comments.`
+      const conditional = 'total comments'
+      carefullyExecute = (text, conditional)
+    } else if (accessLevelIs(currentUserInfoInMemory, 3)) {
+      revokeResponse(currentUser)
+    }
+  }
+
+  // get join time
+  if (
+    checkIfUserIsReferenced(currentComment) &&
+    checkSentenceFor(currentComment, jt_params)
+  ) {
+    if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
+      const { timeJoined: joinedTime } = mentionedUserInfoInMemory
+      const joinedTimeArr = joinedTime.split(':')
+
+      // 1539630794517
+      const before = new Date().setHours(joinedTimeArr[0], joinedTimeArr[1])
+      const now = new Date()
+
+      if (now < before) now.setDate(now.getDate() + 1)
+
+      const interval = now - before
+
+      let timespan = interval
+      const hh = Math.floor(timespan / 1000 / 60 / 60)
+      timespan -= hh * 1000 * 60 * 60
+      const mm = Math.floor(timespan / 1000 / 60)
+      timespan -= mm * 1000 * 60
+
+      const time = `Sir, my earliest records indicate that ${mentionedUser} joined approximately${
+        hh > 0 ? ` ${hh} hour${hh > 1 ? `s` : ``} and` : ``
+      } ${mm} minutes ago at ${
+        joinedTimeArr[0] < 12
+          ? `${joinedTimeArr[0]}:${joinedTimeArr[1]}am`
+          : `${joinedTimeArr[0] - 12}:${joinedTimeArr[1]}pm`
+      }.`
+      const conditional = `user joined time`
+      carefullyExecute(time, conditional)
+    } else if (accessLevelIs(currentUserInfoInMemory, 3)) {
       revokeResponse(currentUser)
     }
   }
@@ -446,50 +591,49 @@ const respondToComment = (subjectivity, polarity, score) => {
   // get users access level
   if (
     checkIfUserIsReferenced(currentComment) &&
-    (currentComment.match('access level').found ||
-      currentComment.match('permission(s)?').found) &&
-    !currentComment.has('promote') &&
-    currentComment.has('yuri')
+    checkSentenceFor(currentComment, al_params)
   ) {
-    if (currentUserInfoInMemory.accessLevel.match(/(1|2)/)) {
-      writeToChat(
-        `${mentionedUser}'s access level is ${
-          mentionedUserInfoInMemory.accessLevel
-        }.`
-      )
+    if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
+      const { accessLevel } = mentionedUserInfoInMemory
+      const text = `${mentionedUser}'s access level is ${accessLevel}.`
+      const conditional = `access level`
+      carefullyExecute(text, conditional)
     } else if (currentUserInfoInMemory.accessLevel.match(/(3)/)) {
       revokeResponse(currentUser)
     }
   }
 
   // get time
-  if (
-    currentComment.has('time') &&
-    !currentComment.has('join') &&
-    !currentComment.not('yuri').has('#Username') &&
-    currentComment.has('yuri')
-  ) {
+  if (checkSentenceFor(currentComment, gt_params)) {
     if (currentUser === memory.self || currentUser === memory.owner) {
       const time = new Date()
-      writeToChat(`Sir, the time is ${time.timeNow()}.`)
+      const text = `Sir, the time is ${time.timeNow()}.`
+      const conditional = `get time`
+      carefullyExecute(text, conditional)
     } else {
-      if (currentUserInfoInMemory.accessLevel.match(/(1|2)/)) {
-        writeToChat(`${currentUser}, the time is ${time.timeNow.toString()}.`)
-      } else if (currentUserInfoInMemory.accessLevel.match(/(3)/)) {
+      if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
+        const text = `${currentUser}, the time is ${time.timeNow.toString()}.`
+        const conditional = `get time`
+        carefullyExecute(text, conditional)
+      } else if (accessLevelIs(currentUserInfoInMemory, 3)) {
         revokeResponse(currentUser)
       }
     }
   }
 
   // get date
-  if (currentComment.has('date') && currentComment.has('yuri')) {
+  if (checkSentenceFor(currentComment, gd_params)) {
     if (currentUser === memory.self || currentUser === memory.owner) {
       const date = new Date()
-      writeToChat(`Sir, the date is ${date.dateNow()}.`)
+      const text = `Sir, the date is ${date.dateNow()}.`
+      const conditional = `get date`
+      carefullyExecute(text, conditional)
     } else {
-      if (currentUserInfoInMemory.accessLevel.match(/(1|2)/)) {
-        writeToChat(`${currentUser}, the date is ${time.dateNow}.`)
-      } else if (currentUserInfoInMemory.accessLevel.match(/(3)/)) {
+      if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
+        const text = `${currentUser}, the date is ${time.dateNow}.`
+        const conditional = `get date`
+        carefullyExecute(text, conditional)
+      } else if (accessLevelIs(currentUserInfoInMemory, 3)) {
         revokeResponse(currentUser)
       }
     }
@@ -717,10 +861,7 @@ const respondToComment = (subjectivity, polarity, score) => {
   }
 
   // read a poem
-  if (
-    text.contains(currentComment, 'poem', 'yuri') &&
-    text.wordsOf(currentComment).length < 7
-  ) {
+  if (checkSentenceFor(currentComment, rp_params)) {
     if (currentUserInfoInMemory.accessLevel.match(/(1|2)/)) {
       $.getJSON(
         `https://cors-escape.herokuapp.com/https://www.poemist.com/api/v1/randompoems`,
@@ -960,16 +1101,13 @@ const respondToComment = (subjectivity, polarity, score) => {
     }
 
     // turn on sentiment analysis mode
-    if (
-      text.contains(currentComment, 'yuri', 'sentiment analysis') &&
-      text.lacks(currentComment, 'deactivate')
-    ) {
+    if (checkSentenceFor(currentComment, asa_params)) {
       writeToChat(`Now analyzing user sentiment.`, 2000)
       setTimeout(() => (state.sentimentMode = true), 2500)
     }
 
     // turn off sentiment analysis mode
-    if (text.contains(currentComment, 'yuri', 'analysis', 'deactivate')) {
+    if (checkSentenceFor(currentComment, dsa_params)) {
       writeToChat(
         `Deactivating Sentiment Analysis. Sentiments for each user have been recorded sir.`,
         2000
