@@ -121,7 +121,7 @@ $.getScript('https://cdnjs.cloudflare.com/ajax/libs/brain/0.6.3/brain.min.js')
 // }
 
 // should make me unbannable
-com.echat.shared.redirect.Controller = {}
+// com.echat.shared.redirect.Controller = {}
 
 const mockRoasts = [
   'You fucking idiot!',
@@ -211,28 +211,28 @@ const setSentimentAnalysisHeader = xhr => {
 //   )
 // }
 
-const message = 'make this message variable dynamic'
+// const message = 'make this message variable dynamic'
 
-// echat spammer
-function pmUser(userUuid, message) {
-  console.log('uuid', userUuid, message)
-  $.cometd.publish('/service/conversation/opened', {
-    conversationUserUuid: userUuid
-  })
-  $.cometd.publish('/service/conversation/message', {
-    conversationUserUuid: userUuid,
-    messageBody: message
-  })
-}
+// // echat spammer
+// function pmUser(userUuid, message) {
+//   console.log('uuid', userUuid, message)
+//   $.cometd.publish('/service/conversation/opened', {
+//     conversationUserUuid: userUuid
+//   })
+//   $.cometd.publish('/service/conversation/message', {
+//     conversationUserUuid: userUuid,
+//     messageBody: message
+//   })
+// }
 
-com.echat.shared.popup.user.Controller.openUserPopup = function(
-  event,
-  clickedWrapper,
-  userUuid
-) {
-  pmUser(userUuid, message)
-  com.echat.shared.conversation.Controller.closeConversation(event, userUuid)
-}
+// com.echat.shared.popup.user.Controller.openUserPopup = function(
+//   event,
+//   clickedWrapper,
+//   userUuid
+// ) {
+//   pmUser(userUuid, message)
+//   com.echat.shared.conversation.Controller.closeConversation(event, userUuid)
+// }
 
 // ****************** YURI FUNCTIONS ******************
 
@@ -987,6 +987,7 @@ const respondToComment = async (subjectivity, polarity, score) => {
         `https://cors-escape.herokuapp.com/https://www.poemist.com/api/v1/randompoems`,
         data => {
           let poem = { title: 'No poem.' }
+          const { title, poet, content } = poem
 
           data.some(poemArr => {
             if (poemArr.content !== null && poemArr.content.length < 1000) {
@@ -996,17 +997,23 @@ const respondToComment = async (subjectivity, polarity, score) => {
             }
             return false
           })
+          let person
+          const intro = `As you wish ${person}. I will read the poem ${title} by ${
+            poet.name
+          }.`
+          console.log(intro)
+          if (currentUser === memory.self || currentUser === memory.owner) {
+            person = `sir`
+            const text = `${content}`
+            writeToChat(intro)
+            writeToChat(text, 1000, 6000)
+          } else {
+            person = `${currentUser}`
+            const text = `${content}`
+            writeToChat(intro)
+            writeToChat(text, 1000, 6000)
+          }
 
-          console.log(
-            `Should log: As you wish sir. I will read the poem: ${
-              poem.title
-            } by ${poem.poet.name}.`
-          )
-          const text = `As you wish sir. I will read the poem ${
-            poem.title
-          } by ${poem.poet.name}.`
-          writeToChat(text)
-          writeToChat(`${poem.content}`, 1000, 6000)
         }
       )
     } else if (accessLevelIs(currentUserInfoInMemory, 3)) {
@@ -1015,7 +1022,7 @@ const respondToComment = async (subjectivity, polarity, score) => {
   }
 
   // get position of ISS
-  if (pis_params) {
+  if (checkSentenceFor(currentComment, pis_params)) {
     if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
       console.log('position triggered')
       $.getJSON(`http://api.open-notify.org/iss-now.json?callback=?`, data => {
@@ -1030,7 +1037,7 @@ const respondToComment = async (subjectivity, polarity, score) => {
   }
 
   // who is on the ISS
-  if (wis_params) {
+  if (checkSentenceFor(currentComment, wis_params)) {
     if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
       console.log('people triggered')
       $.getJSON(`http://api.open-notify.org/astros.json?callback=?`, data => {
@@ -1387,8 +1394,6 @@ const recordComment = async e => {
   }
 }
 
-const calculate = equation => eval(equation)
-
 const batteryDrain = () => {
   let { batteryLevel: battery } = state
   // if (operational && battery >= 0) {
@@ -1647,8 +1652,7 @@ const yuri = {
   batteryDrain: () => batteryDrain(),
   updateUserCount: () => updateUserCount(),
   updateMemoryOfUsers: () => updateMemoryOfUsers(),
-  setAccessControl: () => setAccessControl(),
-  calculate: equation => calculate(equation)
+  setAccessControl: () => setAccessControl()
 }
 
 // ----- ACCESS CONTROL? -------
