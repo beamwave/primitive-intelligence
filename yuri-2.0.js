@@ -558,13 +558,16 @@ const respondToComment = async (subjectivity, polarity, score) => {
 
   // position of iss
   const pis_params = {
-    cantHave: [`who`, `many`],
-    mustHave: [`yuri`, `iss`]
+    cantHave: [`who`, `many`, `calculate`],
+    mustHave: [`yuri`, `where`],
+    regexMatch: [`iss`]
   }
 
   // who is on iss
   const wis_params = {
-    mustHave: [`yuri`, `iss`, `on`]
+    cantHave: [`calculate`],
+    mustHave: [`yuri`, `on`],
+    regexMatch: [`iss`]
   }
 
   // --------------- MODES ---------------
@@ -885,17 +888,20 @@ const respondToComment = async (subjectivity, polarity, score) => {
       }
     }
   }
-
   // run math calculation
   if (checkSentenceFor(currentComment, mc_params)) {
     if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
       const comment = currentComment.out('text')
       const expression = comment.split('calculate')[1]
       let result
+      // yuri calculate 3x + 5x - 7y
       try {
         result = math.eval(expression)
       } catch (e) {
-        result = math.simplify(expression)
+        result = math.simplify(expression).toString()
+        console.log('before', result)
+        result = result.replace(/\s\*\s(?!\d)/gi, '')
+        console.log('after', result)
       }
       const text = `The answer is ${result}.`
       const conditional = `math calculation`
@@ -1011,6 +1017,7 @@ const respondToComment = async (subjectivity, polarity, score) => {
   // get position of ISS
   if (pis_params) {
     if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
+      console.log('position triggered')
       $.getJSON(`http://api.open-notify.org/iss-now.json?callback=?`, data => {
         const lat = data['iss_position']['latitude']
         const lon = data['iss_position']['longitude']
@@ -1025,6 +1032,7 @@ const respondToComment = async (subjectivity, polarity, score) => {
   // who is on the ISS
   if (wis_params) {
     if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
+      console.log('people triggered')
       $.getJSON(`http://api.open-notify.org/astros.json?callback=?`, data => {
         const { number, people } = data
         const text = `The ${number} people currently on the ISS are ${people.map(
