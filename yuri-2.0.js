@@ -41,6 +41,7 @@ com.echat.shared.chatroom.Controller
 // become banker (loan to x, how money does x have)
 // sir you've been on here for 3 hours. Consider (going outside|taking a break)
 // yuri tell me a secret
+// get time in <location> (use tags)
 
 // ------ COMMANDS -------
 // pos mode
@@ -442,13 +443,15 @@ const respondToComment = async (subjectivity, polarity, score) => {
   // first comment
   const fc_params = {
     cantHave: [`"`],
-    mustHave: [`yuri`, `first comment`]
+    mustHave: [`yuri`, `first comment`],
+    maxLength: 7
   }
 
   // last comment
   const lc_params = {
     cantHave: [`"`],
-    mustHave: [`yuri`, `last comment`]
+    mustHave: [`yuri`, `last comment`],
+    maxLength: 7
   }
 
   // total comments
@@ -467,7 +470,7 @@ const respondToComment = async (subjectivity, polarity, score) => {
 
   // get time
   const gt_params = {
-    cantHave: [`"`, `join`],
+    cantHave: [`"`, `join`, `tell`],
     mustHave: [`yuri`, `time`],
     maxLength: 5
   }
@@ -540,12 +543,28 @@ const respondToComment = async (subjectivity, polarity, score) => {
 
   // deactivate mock user
   const dmu_params = {
-    mustHave: ['yuri', 'stop', 'monitoring']
+    mustHave: [`yuri`, `stop`, `monitoring`]
   }
 
   // math calculation
   const mc_params = {
-    mustHave: ['yuri', 'calculate']
+    mustHave: [`yuri`, `calculate`]
+  }
+
+  // hotd
+  const hotd_params = {
+    mustHave: [`yuri`, `on this day`]
+  }
+
+  // position of iss
+  const pis_params = {
+    cantHave: [`who`, `many`],
+    mustHave: [`yuri`, `iss`]
+  }
+
+  // who is on iss
+  const wis_params = {
+    mustHave: [`yuri`, `iss`, `on`]
   }
 
   // --------------- MODES ---------------
@@ -673,13 +692,16 @@ const respondToComment = async (subjectivity, polarity, score) => {
   // get time
   if (checkSentenceFor(currentComment, gt_params)) {
     if (currentUser === memory.self || currentUser === memory.owner) {
+      console.log(currentComment.out('tags').map(obj => obj.tags))
       const time = new Date()
       const text = `Sir, the time is ${time.timeNow()}.`
       const conditional = `get time`
       carefullyExecute(text, conditional)
     } else {
       if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
-        const text = `${currentUser}, the time is ${time.timeNow.toString()}.`
+        console.log(currentComment.out('tags').map(obj => obj.tags))
+        const time = new Date()
+        const text = `${currentUser}, the time is ${time.timeNow()}.`
         const conditional = `get time`
         carefullyExecute(text, conditional)
       } else if (accessLevelIs(currentUserInfoInMemory, 3)) {
@@ -734,7 +756,7 @@ const respondToComment = async (subjectivity, polarity, score) => {
 
       const text = `${mentionedUser} ${insult}`
       const conditional = `roast user`
-      carefullyExecute(text, conditional, 0)
+      carefullyExecute(text, conditional, 1000)
     } else if (accessLevelIs(currentUserInfoInMemory, 3)) {
       revokeResponse(currentUser)
     }
@@ -869,7 +891,12 @@ const respondToComment = async (subjectivity, polarity, score) => {
     if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
       const comment = currentComment.out('text')
       const expression = comment.split('calculate')[1]
-      const result = math.eval(expression)
+      let result
+      try {
+        result = math.eval(expression)
+      } catch (e) {
+        result = math.simplify(expression)
+      }
       const text = `The answer is ${result}.`
       const conditional = `math calculation`
       carefullyExecute(text, conditional)
@@ -879,8 +906,8 @@ const respondToComment = async (subjectivity, polarity, score) => {
   }
 
   // on this day
-  if (currentComment.has('on this day') && currentComment.has('yuri')) {
-    if (currentUserInfoInMemory.accessLevel.match(/(1|2)/)) {
+  if (checkSentenceFor(currentComment, hotd_params)) {
+    if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
       const pos = currentComment
         .match('#Verb #Preposition #Determiner #Date')
         .out('text')
@@ -911,10 +938,10 @@ const respondToComment = async (subjectivity, polarity, score) => {
               if (type === 'Events') {
                 const year = `/${info.year}`
                 const event = info.text.replace(/\([a-z]\. \d{0,4}\)/g, '')
-
                 console.log(`Should log: On ${today}${year}, ${event}`)
-
-                writeToChat(`On ${today}${year}, ${event}`)
+                const text = `On ${today}${year}, ${event}.`
+                const conditional = `event on this day`
+                carefullyExecute(text, conditional)
               } else if (type === 'Births' || type === 'Deaths') {
                 const year = `/${info.year}`
                 const dossier = info.text.split(',')
@@ -923,13 +950,6 @@ const respondToComment = async (subjectivity, polarity, score) => {
                   /\([a-z]\. \d{0,4}\)/g,
                   ''
                 )
-
-                console.log('occ with', dossier[1])
-                console.log(
-                  'occ without',
-                  dossier[1].replace(/\([a-z]\. \d{0,4}\)/g, '')
-                )
-
                 let action = ''
                 if (type === 'Births') action = `was born`
                 if (type === 'Deaths') action = `died`
@@ -937,38 +957,34 @@ const respondToComment = async (subjectivity, polarity, score) => {
                 console.log(
                   `Should log: On ${today}, ${name}, ${occupation.trim()}, ${action}.`
                 )
-
-                writeToChat(
-                  `On ${today}${year}, ${name}, the ${occupation.trim()}, ${action}.`
-                )
+                const text = `On ${today}${year}, ${name}, the ${occupation.trim()}, ${action}.`
+                const conditional = `born/died on this day`
+                carefullyExecute(text, conditional)
               }
             }
           )
         } catch (e) {
-          writeToChat(
-            `Forgive me, but at this moment I am able to give you historical information about today.`
-          )
+          const text = `Forgive me, but at this moment I am able to give you historical information about today.`
+          const conditional = `born/died on this day`
+          carefullyExecute(text, conditional)
         }
       }
-    } else if (currentUserInfoInMemory.accessLevel.match(/(3)/)) {
+    } else if (accessLevelIs(currentUserInfoInMemory, 3)) {
       revokeResponse(currentUser)
     }
   }
 
   // read a poem
   if (checkSentenceFor(currentComment, rp_params)) {
-    if (currentUserInfoInMemory.accessLevel.match(/(1|2)/)) {
+    if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
       $.getJSON(
         `https://cors-escape.herokuapp.com/https://www.poemist.com/api/v1/randompoems`,
         data => {
-          let poem = {
-            title: 'No poem.'
-          }
-          console.log(data)
+          let poem = { title: 'No poem.' }
 
           data.some(poemArr => {
             if (poemArr.content !== null && poemArr.content.length < 1000) {
-              console.log('found a poem.')
+              console.log('Found a poem.')
               poem = poemArr
               return true
             }
@@ -980,63 +996,46 @@ const respondToComment = async (subjectivity, polarity, score) => {
               poem.title
             } by ${poem.poet.name}.`
           )
-          writeToChat(
-            `As you wish sir. I will read the poem ${poem.title} by ${
-              poem.poet.name
-            }.`
-          )
+          const text = `As you wish sir. I will read the poem ${
+            poem.title
+          } by ${poem.poet.name}.`
+          writeToChat(text)
           writeToChat(`${poem.content}`, 1000, 6000)
         }
       )
-    } else if (currentUserInfoInMemory.accessLevel.match(/(3)/)) {
+    } else if (accessLevelIs(currentUserInfoInMemory, 3)) {
       revokeResponse(currentUser)
     }
   }
 
   // get position of ISS
-  if (
-    currentComment.has('iss') &&
-    !currentComment.has('who') &&
-    !currentComment.has('many') &&
-    currentComment.has('yuri')
-  ) {
-    if (currentUserInfoInMemory.accessLevel.match(/(1|2)/)) {
+  if (pis_params) {
+    if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
       $.getJSON(`http://api.open-notify.org/iss-now.json?callback=?`, data => {
         const lat = data['iss_position']['latitude']
         const lon = data['iss_position']['longitude']
-        writeToChat(
-          `Sir the location of the ISS is lat: ${lat} lon: ${lon}.`,
-          3000,
-          7000
-        )
+        const text = `Sir the location of the ISS is lat: ${lat} lon: ${lon}.`
+        writeToChat(text, 3000, 7000)
       })
-    } else if (currentUserInfoInMemory.accessLevel.match(/(3)/)) {
+    } else if (accessLevelIs(currentUserInfoInMemory, 3)) {
       revokeResponse(currentUser)
     }
   }
 
   // who is on the ISS
-  if (
-    currentComment.has('on') &&
-    currentComment.has('iss') &&
-    currentComment.has('yuri')
-  ) {
-    if (currentUserInfoInMemory.accessLevel.match(/(1|2)/)) {
+  if (wis_params) {
+    if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
       $.getJSON(`http://api.open-notify.org/astros.json?callback=?`, data => {
         const { number, people } = data
-
-        writeToChat(
-          `The ${number} people currently on the ISS are ${people.map(
-            (person, i) => {
-              if (i + 1 < people.length) return ` ${person.name}`
-              else return ` and ${person.name}`
-            }
-          )}.`,
-          3000,
-          7000
-        )
+        const text = `The ${number} people currently on the ISS are ${people.map(
+          (person, i) => {
+            if (i + 1 < people.length) return ` ${person.name}`
+            else return ` and ${person.name}`
+          }
+        )}.`
+        writeToChat(text, 3000, 7000)
       })
-    } else if (currentUserInfoInMemory.accessLevel.match(/(3)/)) {
+    } else if (accessLevelIs(currentUserInfoInMemory, 3)) {
       revokeResponse(currentUser)
     }
   }
