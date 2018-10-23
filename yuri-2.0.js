@@ -480,7 +480,8 @@ const respondToComment = async (subjectivity, polarity, score) => {
   // get time
   const gt_params = {
     cantHave: [`"`, `join`, `tell`],
-    mustHave: [`yuri`, `time`],
+    mustHave: [`yuri`],
+    regexMatch: [` time`],
     maxLength: 5
   }
 
@@ -557,7 +558,7 @@ const respondToComment = async (subjectivity, polarity, score) => {
   // activate mock user
   const amu_params = {
     mustHave: ['yuri'],
-    regexMatch: [`(every( *)time|(tell|call))`]
+    regexMatch: [`every( )?time`, `( tell |call)`]
   }
 
   // deactivate mock user
@@ -1030,7 +1031,7 @@ const respondToComment = async (subjectivity, polarity, score) => {
     }
   }
 
-  // read a poem !!!
+  // read a poem
   if (checkSentenceFor(currentComment, rp_params)) {
     if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
       $.getJSON(
@@ -1072,7 +1073,6 @@ const respondToComment = async (subjectivity, polarity, score) => {
   // get position of ISS
   if (checkSentenceFor(currentComment, pis_params)) {
     if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
-      console.log('position triggered')
       $.getJSON(`http://api.open-notify.org/iss-now.json?callback=?`, data => {
         const lat = data['iss_position']['latitude']
         const lon = data['iss_position']['longitude']
@@ -1087,7 +1087,6 @@ const respondToComment = async (subjectivity, polarity, score) => {
   // who is on the ISS
   if (checkSentenceFor(currentComment, wis_params)) {
     if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
-      console.log('people triggered')
       $.getJSON(`http://api.open-notify.org/astros.json?callback=?`, data => {
         const { number, people } = data
         const text = `The ${number} people currently on the ISS are ${people.map(
@@ -1542,7 +1541,28 @@ updateMemoryOfUsers = () => {
   userList = userList.map(wrapper => {
     const username = wrapper.textContent
 
-    // get all the comments for this user
+    // get INFORMATION about this user
+    let UserRecord = memory.users.filter(user => user =>
+      user.username === username
+    )[0]
+
+    // set DEFAULTS for this user
+    if (!!UserRecord) UserRecord = UserRecord
+    else
+      UserRecord = {
+        username: '',
+        timeJoined: '',
+        numberOfCommentsFromThisUser: '',
+        firstComment: '',
+        lastComment: '',
+        accessLevel: '',
+        accounts: '',
+        funds: '',
+        yuriCalls: '',
+        yuriStatus: ''
+      }
+
+    // get all the COMMENTS for this user
     const commentsFilteredByThisUser = allLobbyComments.filter(
       container =>
         container.querySelector(
@@ -1560,9 +1580,10 @@ updateMemoryOfUsers = () => {
       // set user's FIRST COMMENT
       // and if first comment is empty, then set it
       if (
-        memory.users.filter(
-          user => user.username === username && user.firstComment === ''
-        ).length > 0
+        !!UserRecord.firstComment
+        // memory.users.filter(
+        //   user => user.username === username && user.firstComment === ''
+        // ).length > 0
       ) {
         firstComment = commentsFilteredByThisUser[0].querySelector(
           '.echat-shared-chat-message-wrapper .echat-shared-chat-message-body'
@@ -1570,13 +1591,15 @@ updateMemoryOfUsers = () => {
       }
       // otherwise keep it the same.
       if (
-        memory.users.filter(
-          user => user.username === username && user.firstComment !== ''
-        ).length > 0
+        !!UserRecord.firstComment
+        // memory.users.filter(
+        //   user => user.username === username && user.firstComment !== ''
+        // ).length > 0
       ) {
-        firstComment = memory.users.filter(
-          user => user.username === username
-        )[0].firstComment
+        firstComment = UserRecord.firstComment
+        // firstComment = memory.users.filter(
+        //   user => user.username === username
+        // )[0].firstComment
       }
 
       // set user's LAST COMMENT
@@ -1590,9 +1613,10 @@ updateMemoryOfUsers = () => {
       // set user's TIME JOINED
       // if no joined time has been assigned to the user, then add it
       if (
-        memory.users.filter(
-          user => user.username === username && user.timeJoined === ''
-        ).length > 0
+        !!UserRecord.timeJoined
+        // memory.users.filter(
+        //   user => user.username === username && user.timeJoined === ''
+        // ).length > 0
       ) {
         timeJoined = commentsFilteredByThisUser[0]
           .querySelector(
@@ -1603,12 +1627,14 @@ updateMemoryOfUsers = () => {
 
       // else keep the joined time the same
       if (
-        memory.users.filter(
-          user => user.username === username && user.timeJoined !== ''
-        ).length > 0
+        !!UserRecord.firstComment
+        // memory.users.filter(
+        //   user => user.username === username && user.timeJoined !== ''
+        // ).length > 0
       ) {
-        timeJoined = memory.users.filter(user => user.username === username)[0]
-          .timeJoined
+        timeJoined = UserRecord.timeJoined
+        // timeJoined = memory.users.filter(user => user.username === username)[0]
+        //   .timeJoined
       }
     }
 
@@ -1617,31 +1643,28 @@ updateMemoryOfUsers = () => {
 
     // set user's ACCESS LEVEL
     let accessLevel
-    if (memory.users.filter(user => user.username === username).length === 0) {
-      if (username === memory.self || username === memory.owner) {
+    if (!!UserRecord) {
+      // if (memory.users.filter(user => user.username === username).length === 0) {
+      if (username === memory.self || username === memory.owner)
         accessLevel = 'Level 1'
-      } else {
-        accessLevel = 'Level 3'
-      }
-    } else {
-      accessLevel = memory.users.filter(user => user.username === username)[0]
-        .accessLevel
-    }
+      else accessLevel = 'Level 3'
+    } else accessLevel = UserRecord.accessLevel
+    // accessLevel = memory.users.filter(user => user.username === username)[0]
+    //   .accessLevel
 
     // set user's YURI CALL # and YURI COOLDOWN
     let yuriCalls
-    if (memory.users.filter(user => user.username === username).length === 0) {
-      if (username === memory.self || username === memory.owner) {
-        yuriCalls = 0
-      } else {
-        yuriCalls = 0
-      }
-    } else {
-      accessLevel = memory.users.filter(user => user.username === username)[0]
-        .yuriCalls
-    }
+    if (!!UserRecord) {
+      // if (memory.users.filter(user => user.username === username).length === 0) {
+      if (username === memory.self || username === memory.owner) yuriCalls = 0
+      else yuriCalls = 0
+    } else
+      accessLevel =
+        // accessLevel = memory.users.filter(user => user.username === username)[0]
+        UserRecord.accessLevel.yuriCalls
 
     // FUTURE SETTINGS
+    let yuriStatus = undefined
     let accounts = []
     let funds = 0
 
