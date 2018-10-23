@@ -42,6 +42,7 @@ com.echat.shared.chatroom.Controller
 // sir you've been on here for 3 hours. Consider (going outside|taking a break)
 // yuri tell me a secret
 // get time in <location> (use tags)
+// yori ignore x (now ignoring x commands sir. x, these are my last words to you.)
 
 // ------ COMMANDS -------
 // pos mode
@@ -257,11 +258,11 @@ const writeToChat = (text, delay = 3000, intervalPeriod = 3000) => {
       console.log(
         `index of text part: ${i}`,
         `initial delay time: ${i + 2}`,
-        `each subsequent delay: ${(i + 3) * 5 * 1000}`,
-        `interval period in seconds: ${(i + 3) * 5}`
+        `each subsequent delay: ${(i + 1) * 5 * 1000}`,
+        `interval period in seconds: ${(i + 1) * 5}`
       )
     )
-    parsed.map((sentence, i) => textTimeout(sentence, (i + 3) * intervalPeriod))
+    parsed.map((sentence, i) => textTimeout(sentence, (i + 1) * intervalPeriod))
   }
 }
 
@@ -292,6 +293,12 @@ const sentimentAnalysis = comment =>
 const roast = async () =>
   await $.getJSON(
     `https://cors-escape.herokuapp.com/https://www.jasonbase.com/things/ZAJz.json`,
+    data => data
+  )
+
+const laugh = async () =>
+  await $.getJSON(
+    `https://cors-escape.herokuapp.com/https://www.jasonbase.com/things/l4ko.json`,
     data => data
   )
 
@@ -425,6 +432,10 @@ const respondToComment = async (subjectivity, polarity, score) => {
   allUsers.some(name => {
     if (
       name.parsed !== 'yuri' &&
+      name.original !== '____' &&
+      name.original !== 'ÅÐÅM' &&
+      name.simpleParse.length > 1 &&
+      name.deepParse.length > 1 &&
       (parsedComment.includes(name.simpleParse) ||
         parsedComment.includes(name.deepParse))
     ) {
@@ -433,8 +444,6 @@ const respondToComment = async (subjectivity, polarity, score) => {
     }
     return false
   })
-
-  console.log('mentioned user', mentionedUser)
 
   const mentionedUserInfoInMemory = getUserDataFromMemory(mentionedUser)
 
@@ -515,6 +524,16 @@ const respondToComment = async (subjectivity, polarity, score) => {
     mustHave: [`yuri`, `roast`]
   }
 
+  const sru_params = {
+    mustHave: [`tsu`]
+  }
+
+  // make laugh
+  const ml_params = {
+    mustHave: ['yuri'],
+    regexMatch: [`(make me laugh|something funny|a joke)`]
+  }
+
   // yuri
   const y1_params = {
     regexMatchCase: [`^(Y|y)uri$`]
@@ -558,14 +577,13 @@ const respondToComment = async (subjectivity, polarity, score) => {
 
   // position of iss
   const pis_params = {
-    cantHave: [`who`, `many`, `calculate`],
+    cantHave: [`who`, `many`],
     mustHave: [`yuri`, `where`],
     regexMatch: [`iss`]
   }
 
   // who is on iss
   const wis_params = {
-    cantHave: [`calculate`],
     mustHave: [`yuri`, `on`],
     regexMatch: [`iss`]
   }
@@ -757,12 +775,42 @@ const respondToComment = async (subjectivity, polarity, score) => {
       const insult = roasts[rand]
       console.log(insult)
 
-      const text = `${mentionedUser} ${insult}`
+      const text = `${mentionedUser}${insult}`
       const conditional = `roast user`
       carefullyExecute(text, conditional, 1000)
     } else if (accessLevelIs(currentUserInfoInMemory, 3)) {
       revokeResponse(currentUser)
     }
+  }
+
+  // another roast trigger
+  if (
+    checkSentenceFor(currentComment, sru_params) &&
+    currentUser !== 'THE FUCKING MIGHTY ALEXZERO ▲'
+  ) {
+    const data = await roast()
+    const { roasts } = data
+    const max = roasts.length
+    const rand = randomNumber(0, max)
+    const insult = roasts[rand]
+    console.log(insult)
+    const text = `${currentUser}${insult}`
+    const conditional = `roast user`
+    carefullyExecute(text, conditional, 1000)
+  }
+
+  // make person laugh
+  if (checkSentenceFor(currentComment, ml_params)) {
+    console.log('starting joke')
+    const data = await laugh()
+    const { humor } = data
+    const max = humor.length
+    const rand = randomNumber(0, max)
+    const joke = humor[rand]
+    console.log(joke)
+    const text = `${joke}`
+    const conditional = `make laugh`
+    carefullyExecute(text, conditional)
   }
 
   // yuri
@@ -901,6 +949,8 @@ const respondToComment = async (subjectivity, polarity, score) => {
         result = math.simplify(expression).toString()
         console.log('before', result)
         result = result.replace(/\s\*\s(?!\d)/gi, '')
+        result = result.replace(/\^( *)(\d)/g, '<sup>$2</sup>')
+        result = result.replace(/\s(?=<sup>)/g, '')
         console.log('after', result)
       }
       const text = `The answer is ${result}.`
@@ -980,14 +1030,13 @@ const respondToComment = async (subjectivity, polarity, score) => {
     }
   }
 
-  // read a poem
+  // read a poem !!!
   if (checkSentenceFor(currentComment, rp_params)) {
     if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
       $.getJSON(
         `https://cors-escape.herokuapp.com/https://www.poemist.com/api/v1/randompoems`,
         data => {
           let poem = { title: 'No poem.' }
-          const { title, poet, content } = poem
 
           data.some(poemArr => {
             if (poemArr.content !== null && poemArr.content.length < 1000) {
@@ -998,22 +1047,21 @@ const respondToComment = async (subjectivity, polarity, score) => {
             return false
           })
           let person
-          const intro = `As you wish ${person}. I will read the poem ${title} by ${
-            poet.name
-          }.`
+          const intro = `As you wish ${person}. I will read the poem ${
+            poem.title
+          } by ${poem.poet.name}.`
           console.log(intro)
           if (currentUser === memory.self || currentUser === memory.owner) {
             person = `sir`
-            const text = `${content}`
+            const text = `${poem.content}`
             writeToChat(intro)
             writeToChat(text, 1000, 6000)
           } else {
             person = `${currentUser}`
-            const text = `${content}`
+            const text = `${poem.content}`
             writeToChat(intro)
             writeToChat(text, 1000, 6000)
           }
-
         }
       )
     } else if (accessLevelIs(currentUserInfoInMemory, 3)) {
@@ -1509,7 +1557,7 @@ updateMemoryOfUsers = () => {
 
     // if the user has comments
     if (commentsFilteredByThisUser.length > 0) {
-      // FIRST COMMENT
+      // set user's FIRST COMMENT
       // and if first comment is empty, then set it
       if (
         memory.users.filter(
@@ -1531,7 +1579,7 @@ updateMemoryOfUsers = () => {
         )[0].firstComment
       }
 
-      // LAST COMMENT
+      // set user's LAST COMMENT
       // the last comment always changes
       lastComment = commentsFilteredByThisUser[
         commentsFilteredByThisUser.length - 1
@@ -1539,7 +1587,7 @@ updateMemoryOfUsers = () => {
         '.echat-shared-chat-message-wrapper .echat-shared-chat-message-body'
       ).textContent
 
-      // TIME JOINED
+      // set user's TIME JOINED
       // if no joined time has been assigned to the user, then add it
       if (
         memory.users.filter(
@@ -1564,11 +1612,11 @@ updateMemoryOfUsers = () => {
       }
     }
 
-    // also get the users total comments
+    // set user's TOTAL COMMENTS
     const numberOfCommentsFromThisUser = commentsFilteredByThisUser.length
 
+    // set user's ACCESS LEVEL
     let accessLevel
-
     if (memory.users.filter(user => user.username === username).length === 0) {
       if (username === memory.self || username === memory.owner) {
         accessLevel = 'Level 1'
@@ -1580,6 +1628,23 @@ updateMemoryOfUsers = () => {
         .accessLevel
     }
 
+    // set user's YURI CALL # and YURI COOLDOWN
+    let yuriCalls
+    if (memory.users.filter(user => user.username === username).length === 0) {
+      if (username === memory.self || username === memory.owner) {
+        yuriCalls = 0
+      } else {
+        yuriCalls = 0
+      }
+    } else {
+      accessLevel = memory.users.filter(user => user.username === username)[0]
+        .yuriCalls
+    }
+
+    // FUTURE SETTINGS
+    let accounts = []
+    let funds = 0
+
     // and finally return all that to the array
     return {
       username,
@@ -1587,7 +1652,11 @@ updateMemoryOfUsers = () => {
       numberOfCommentsFromThisUser,
       firstComment,
       lastComment,
-      accessLevel
+      accessLevel,
+      accounts,
+      funds,
+      yuriCalls,
+      yuriStatus
     }
   })
 
