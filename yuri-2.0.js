@@ -85,6 +85,9 @@ com.echat.shared.chatroom.Controller
 // compromise.js
 $.getScript('https://unpkg.com/compromise@latest/builds/compromise.min.js')
 
+// currency.js
+$.getScript('https://unpkg.com/currency.js@~1.2.0/dist/currency.min.js')
+
 // math.js
 $.getScript('https://cdnjs.cloudflare.com/ajax/libs/mathjs/5.2.0/math.min.js')
 
@@ -188,6 +191,11 @@ const textSplitter = (text, len) => {
   strings = [...strings, text]
   return strings
 }
+
+const money = amount =>
+  currency(amount, {
+    formatWithSymbol: true
+  }).format()
 
 const randomNumber = (min, max) => Math.round(Math.random() * (max - min)) + min
 
@@ -477,6 +485,25 @@ const respondToComment = async (subjectivity, polarity, score) => {
     regexMatch: [`(when|what time)`, `join(?!ed)`]
   }
 
+  // access level
+  const al_params = {
+    cantHave: [`"`, `promote`],
+    mustHave: [`yuri`],
+    regexMatch: [`(access level|permission(s)?)`]
+  }
+
+  // user's money
+  const um_params = {
+    cantHave: [`deposit`, `withdraw`],
+    mustHave: [`yuri`],
+    regexMatch: [`(money|funds|balance)`]
+  }
+
+  // deposit money
+  const dm_params = {
+    mustHave: [`yuri`, `deposit`]
+  }
+
   // get time
   const gt_params = {
     cantHave: [`"`, `join`, `tell`],
@@ -488,13 +515,6 @@ const respondToComment = async (subjectivity, polarity, score) => {
   // get date
   const gd_params = {
     mustHave: [`yuri`, `date`]
-  }
-
-  // access level
-  const al_params = {
-    cantHave: [`"`, `promote`],
-    mustHave: [`yuri`],
-    regexMatch: [`(access level|permission(s)?)`]
   }
 
   // total people
@@ -509,13 +529,13 @@ const respondToComment = async (subjectivity, polarity, score) => {
     maxLength: 7
   }
 
-  // activate sentiment analysis
+  // activate sentiment analysis (lvl 1 command)
   const asa_params = {
     mustHave: [`yuri`, `sentiment analysis`],
     cantHave: [`deactivate`]
   }
 
-  // deactivate sentiment analysis
+  // deactivate sentiment analysis (lvl 1 command)
   const dsa_params = {
     mustHave: [`yuri`, `analysis`, `deactivate`]
   }
@@ -555,13 +575,13 @@ const respondToComment = async (subjectivity, polarity, score) => {
     regexMatchCase: [`^YURI$`]
   }
 
-  // activate mock user
+  // activate mock user (lvl 1 command)
   const amu_params = {
     mustHave: ['yuri'],
     regexMatch: [`every( )?time`, `( tell |call)`]
   }
 
-  // deactivate mock user
+  // deactivate mock user (lvl 1 command)
   const dmu_params = {
     mustHave: [`yuri`, `stop`, `monitoring`]
   }
@@ -571,7 +591,7 @@ const respondToComment = async (subjectivity, polarity, score) => {
     mustHave: [`yuri`, `calculate`]
   }
 
-  // hotd
+  // happened on this day
   const hotd_params = {
     mustHave: [`yuri`, `on this day`]
   }
@@ -589,6 +609,23 @@ const respondToComment = async (subjectivity, polarity, score) => {
     regexMatch: [`iss`]
   }
 
+  // give advice
+  const ga_params = {
+    cantHave: [`about`],
+    mustHave: [`yuri`, `advice`]
+  }
+
+  // give advice about
+  const gaa_params = {
+    mustHave: [`yuri`, `advice`, `about`]
+  }
+
+  // most common word (lvl 1 command)
+  const mcw_params = {
+    mustHave: [`yuri`, `word`, `what`],
+    regexMatch: [`(frequent|common|used)`]
+  }
+
   // --------------- MODES ---------------
 
   if (state.sentimentMode) {
@@ -601,7 +638,7 @@ const respondToComment = async (subjectivity, polarity, score) => {
 
   // --------------- ACTIONS ---------------
 
-  // get users first comment
+  // get user's first comment
   if (
     checkIfUserIsReferenced(currentComment) &&
     checkSentenceFor(currentComment, fc_params)
@@ -631,7 +668,7 @@ const respondToComment = async (subjectivity, polarity, score) => {
     }
   }
 
-  // get users total comments
+  // get user's total comments
   if (
     checkIfUserIsReferenced(currentComment) &&
     checkSentenceFor(currentComment, tc_params)
@@ -653,7 +690,7 @@ const respondToComment = async (subjectivity, polarity, score) => {
     }
   }
 
-  // get join time
+  // get user's join time
   if (
     checkIfUserIsReferenced(currentComment) &&
     checkSentenceFor(currentComment, jt_params)
@@ -696,7 +733,7 @@ const respondToComment = async (subjectivity, polarity, score) => {
     }
   }
 
-  // get users access level
+  // get user's access level
   if (
     checkIfUserIsReferenced(currentComment) &&
     checkSentenceFor(currentComment, al_params)
@@ -705,6 +742,66 @@ const respondToComment = async (subjectivity, polarity, score) => {
       const { accessLevel } = mentionedUserInfoInMemory
       const text = `${mentionedUser}'s access level is ${accessLevel}.`
       const conditional = `access level`
+      carefullyExecute(text, conditional)
+    } else if (currentUserInfoInMemory.accessLevel.match(/(3)/)) {
+      revokeResponse(currentUser)
+    }
+  }
+
+  // get user's money
+  if (
+    (checkIfUserIsReferenced(currentComment) ||
+      currentComment.out('text').match(/ my /i)) &&
+    checkSentenceFor(currentComment, um_params)
+  ) {
+    if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
+      const { balance } = mentionedUserInfoInMemory
+      const text = `${
+        mentionedUser ? mentionedUser + `\'s` : `Your`
+      } balance is ${currency(balance, { formatWithSymbol: true }).format()}.`
+      const conditional = `user balance`
+      carefullyExecute(text, conditional)
+    } else if (currentUserInfoInMemory.accessLevel.match(/(3)/)) {
+      revokeResponse(currentUser)
+    }
+  }
+
+  // deposit money into user's account
+  if (
+    checkIfUserIsReferenced(currentComment) &&
+    checkSentenceFor(currentComment, dm_params)
+  ) {
+    if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
+      const { balance } = mentionedUserInfoInMemory
+
+      const sentenceToArray = currentComment.out('array')
+      const indexOfDeposit = sentenceToArray.indexOf('deposit')
+      const amountToAdd = sentenceToArray[indexOfDeposit + 1]
+
+      console.log('amount to add:', amountToAdd)
+
+      const oldMemories = memory.users
+      let updatedUser = oldMemories.filter(
+        user =>
+          user.username.toLowerCase().trim() ===
+          mentionedUser.toLowerCase().trim()
+      )[0]
+
+      console.log('user balance:', updatedUser.balance)
+      console.log('amount being added:', currency(updatedUser.balance).add(
+        money(amountToAdd)))
+
+      updatedUser.balance = currency(updatedUser.balance).add(
+        money(amountToAdd)
+      )
+      memory.users = [...oldMemories, updatedUser]
+
+      console.log('updated user balance:', updatedUser.balance)
+
+      const text = `${money(
+        amountToAdd
+      )} has been added to ${mentionedUser}'s account.`
+      const conditional = `user balance`
       carefullyExecute(text, conditional)
     } else if (currentUserInfoInMemory.accessLevel.match(/(3)/)) {
       revokeResponse(currentUser)
@@ -1103,27 +1200,19 @@ const respondToComment = async (subjectivity, polarity, score) => {
   }
 
   // give advice
-  if (
-    currentComment.has('advice') &&
-    !currentComment.has('about') &&
-    currentComment.has('yuri')
-  ) {
-    if (currentUserInfoInMemory.accessLevel.match(/(1|2)/)) {
+  if (checkSentenceFor(currentComment, ga_params)) {
+    if (accessLevelIs(currentUserInfoInMemory, 1, 2))
       $.getJSON(
         `https://cors-escape.herokuapp.com/http://api.adviceslip.com/advice`,
         data => writeToChat(`${data.slip.advice}`)
       )
-    } else if (currentUserInfoInMemory.accessLevel.match(/(3)/)) {
+    else if (accessLevelIs(currentUserInfoInMemory, 3))
       revokeResponse(currentUser)
-    }
   }
+
   // give advice about x
-  if (
-    currentComment.has('advice') &&
-    currentComment.has('about') &&
-    currentComment.has('yuri')
-  ) {
-    if (currentUserInfoInMemory.accessLevel.match(/(1|2)/)) {
+  if (checkSentenceFor(currentComment, gaa_params)) {
+    if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
       const sentenceToArray = currentComment.out('text').split(' ')
       const indexOfAbout = sentenceToArray.indexOf('about')
       const query = sentenceToArray[indexOfAbout + 1]
@@ -1138,19 +1227,14 @@ const respondToComment = async (subjectivity, polarity, score) => {
           writeToChat(advice)
         }
       )
-    } else if (currentUserInfoInMemory.accessLevel.match(/(3)/)) {
+    } else if (accessLevelIs(currentUserInfoInMemory, 3))
       revokeResponse(currentUser)
-    }
   }
 
   // get most common word
-  if (
-    currentComment.match('/(frequent|common|used)/').found &&
-    currentComment.has('word') &&
-    currentComment.has('yuri')
-  ) {
-    const text = memory.commentLogs.map(log => log.comment).join(' ')
-    const freq = nlp(text)
+  if (checkSentenceFor(currentComment, mcw_params)) {
+    const speech = memory.commentLogs.map(log => log.comment).join(' ')
+    const freq = nlp(speech)
       .terms()
       .out('freq')
     const index = currentComment.values().numbers()[0]
@@ -1158,8 +1242,26 @@ const respondToComment = async (subjectivity, polarity, score) => {
       : 0
 
     if (currentUser === memory.self || currentUser === memory.owner) {
-      writeToChat(
-        `Sir, the ${currentComment
+      const text = `Sir, the ${currentComment
+        .values()
+        .toOrdinal()
+        .out()} most common word is "${freq[index].normal}", which is used ${
+        freq[index].count
+      } times and accounts for ${
+        freq[index].percent
+      }% of all words in this chat session.`
+      writeToChat(text)
+    } else {
+      const speech = memory.commentLogs.map(log => log.comment).join(' ')
+      const freq = nlp(speech)
+        .terms()
+        .out('freq')
+      const index = currentComment.values().numbers()[0]
+        ? currentComment.values().numbers()[0]
+        : 0
+
+      if (accessLevelIs(currentUserInfoInMemory, 1)) {
+        const text = `${currentUser}, the ${currentComment
           .values()
           .toOrdinal()
           .out()} most common word is "${freq[index].normal}", which is used ${
@@ -1167,28 +1269,8 @@ const respondToComment = async (subjectivity, polarity, score) => {
         } times and accounts for ${
           freq[index].percent
         }% of all words in this chat session.`
-      )
-    } else {
-      const text = memory.commentLogs.map(log => log.comment).join(' ')
-      const freq = nlp(text)
-        .terms()
-        .out('freq')
-      const index = currentComment.values().numbers()[0]
-        ? currentComment.values().numbers()[0]
-        : 0
-
-      if (currentUserInfoInMemory.accessLevel.match(/1/)) {
-        writeToChat(
-          `${currentUser}, the ${currentComment
-            .values()
-            .toOrdinal()
-            .out()} most common word is "${
-            freq[index].normal
-          }", which is used ${freq[index].count} times and accounts for ${
-            freq[index].percent
-          }% of all words in this chat session.`
-        )
-      } else if (currentUserInfoInMemory.accessLevel.match(/(2|3)/)) {
+        writeToChat(text)
+      } else if (accessLevelIs(currentUserInfoInMemory, 2, 3)) {
         revokeResponse(currentUser)
       }
     }
@@ -1666,7 +1748,7 @@ updateMemoryOfUsers = () => {
     // FUTURE SETTINGS
     let yuriStatus = undefined
     let accounts = []
-    let funds = 0
+    let balance = 0
 
     // and finally return all that to the array
     return {
@@ -1677,7 +1759,7 @@ updateMemoryOfUsers = () => {
       lastComment,
       accessLevel,
       accounts,
-      funds,
+      balance,
       yuriCalls,
       yuriStatus
     }
@@ -1717,7 +1799,9 @@ const state = {
   roastAllMode: false,
   mockUsersMode: false,
   autopilotMode: false,
-  sentimentMode: false
+  sentimentMode: false,
+  ignoreMode: false,
+  triviaMode: false
 }
 
 // ****************** COMMANDS ******************
