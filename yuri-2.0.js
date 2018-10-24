@@ -504,6 +504,11 @@ const respondToComment = async (subjectivity, polarity, score) => {
     mustHave: [`yuri`, `deposit`]
   }
 
+  // deduct money
+  const ddm_params = {
+    mustHave: [`yuri`, `deduct`]
+  }
+
   // get time
   const gt_params = {
     cantHave: [`"`, `join`, `tell`],
@@ -626,6 +631,66 @@ const respondToComment = async (subjectivity, polarity, score) => {
     regexMatch: [`(frequent|common|used)`]
   }
 
+  // activate pos mode
+  const apos_params = {
+    mustHave: [`pos mode`, `activate`]
+  }
+
+  // deactivate pos mode
+  const dpos_params = {
+    mustHave: [`pos mode`, `deactivate`]
+  }
+
+  // activate autopilot mode
+  const aam_params = {
+    mustHave: [`yuri`],
+    regexMatch: [`(i(')?ll be back|autopilot)`]
+  }
+
+  // deactivate autopilot mode
+  const dam_params = {
+    cantHave: [`be`],
+    mustHave: [`yuri`],
+    regexMatch: [`back`]
+  }
+
+  // battery level
+  const bl_params = {
+    mustHave: [`yuri`],
+    regexMatch: [`(battery|juice)`]
+  }
+
+  // backup battery level
+  const bbl_params = {
+    cantHave: [`%`],
+    mustHave: [`yuri`],
+    regexMatch: [`(back(\s)?up|reserve)`]
+  }
+
+  // promote user (lvl 1 command)
+  const pu_params = {
+    mustHave: [`yuri`, `promote`],
+    regexMatch: [`level (1|2)`]
+  }
+
+  // demote user (lvl 1 command)
+  const du_params = {
+    mustHave: [`yuri`, `demote`],
+    regexMatch: [`level (2|3)`]
+  }
+
+  // promote all users (lvl 0 command)
+  const pau_params = {
+    mustHave: [`yuri`, `promote`, `all`],
+    regexMatch: [`level (1|2)`]
+  }
+
+  // demote all users (lvl 0 command)
+  const dau_params = {
+    mustHave: [`yuri`, `demote`, `all`],
+    regexMatch: [`level (2|3)`]
+  }
+
   // --------------- MODES ---------------
 
   if (state.sentimentMode) {
@@ -643,7 +708,7 @@ const respondToComment = async (subjectivity, polarity, score) => {
     checkIfUserIsReferenced(currentComment) &&
     checkSentenceFor(currentComment, fc_params)
   ) {
-    if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
+    if (accessLevelIs(currentUserInfoInMemory, 0, 1, 2)) {
       const { username, firstComment } = mentionedUserInfoInMemory
       const text = `${username}'s first comment was "${firstComment}"`
       const conditional = `first comment`
@@ -658,7 +723,7 @@ const respondToComment = async (subjectivity, polarity, score) => {
     checkIfUserIsReferenced(currentComment) &&
     checkSentenceFor(currentComment, lc_params)
   ) {
-    if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
+    if (accessLevelIs(currentUserInfoInMemory, 0, 1, 2)) {
       const { lastComment } = mentionedUserInfoInMemory
       const text = `${mentionedUser}'s last comment was "${lastComment}"`
       const conditional = `last comment`
@@ -673,7 +738,7 @@ const respondToComment = async (subjectivity, polarity, score) => {
     checkIfUserIsReferenced(currentComment) &&
     checkSentenceFor(currentComment, tc_params)
   ) {
-    if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
+    if (accessLevelIs(currentUserInfoInMemory, 0, 1, 2)) {
       const conditional = 'total comments'
       try {
         const {
@@ -695,7 +760,7 @@ const respondToComment = async (subjectivity, polarity, score) => {
     checkIfUserIsReferenced(currentComment) &&
     checkSentenceFor(currentComment, jt_params)
   ) {
-    if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
+    if (accessLevelIs(currentUserInfoInMemory, 0, 1, 2)) {
       const { timeJoined: joinedTime } = mentionedUserInfoInMemory
       const joinedTimeArr = joinedTime.split(':')
 
@@ -738,12 +803,12 @@ const respondToComment = async (subjectivity, polarity, score) => {
     checkIfUserIsReferenced(currentComment) &&
     checkSentenceFor(currentComment, al_params)
   ) {
-    if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
+    if (accessLevelIs(currentUserInfoInMemory, 0, 1, 2)) {
       const { accessLevel } = mentionedUserInfoInMemory
       const text = `${mentionedUser}'s access level is ${accessLevel}.`
       const conditional = `access level`
       carefullyExecute(text, conditional)
-    } else if (currentUserInfoInMemory.accessLevel.match(/(3)/)) {
+    } else if (accessLevelIs(currentUserInfoInMemory, 3)) {
       revokeResponse(currentUser)
     }
   }
@@ -754,14 +819,14 @@ const respondToComment = async (subjectivity, polarity, score) => {
       currentComment.out('text').match(/ my /i)) &&
     checkSentenceFor(currentComment, um_params)
   ) {
-    if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
+    if (accessLevelIs(currentUserInfoInMemory, 0, 1, 2)) {
       const { balance } = mentionedUserInfoInMemory
       const text = `${
         mentionedUser ? mentionedUser + `\'s` : `Your`
       } balance is ${currency(balance, { formatWithSymbol: true }).format()}.`
       const conditional = `user balance`
       carefullyExecute(text, conditional)
-    } else if (currentUserInfoInMemory.accessLevel.match(/(3)/)) {
+    } else if (accessLevelIs(currentUserInfoInMemory, 3)) {
       revokeResponse(currentUser)
     }
   }
@@ -771,14 +836,12 @@ const respondToComment = async (subjectivity, polarity, score) => {
     checkIfUserIsReferenced(currentComment) &&
     checkSentenceFor(currentComment, dm_params)
   ) {
-    if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
-      const { balance } = mentionedUserInfoInMemory
+    if (accessLevelIs(currentUserInfoInMemory, 0, 1, 2)) {
+      const { balance: preBalance } = mentionedUserInfoInMemory
 
       const sentenceToArray = currentComment.out('array')
       const indexOfDeposit = sentenceToArray.indexOf('deposit')
       const amountToAdd = sentenceToArray[indexOfDeposit + 1]
-
-      console.log('amount to add:', amountToAdd)
 
       const oldMemories = memory.users
       let updatedUser = oldMemories.filter(
@@ -787,23 +850,65 @@ const respondToComment = async (subjectivity, polarity, score) => {
           mentionedUser.toLowerCase().trim()
       )[0]
 
-      console.log('user balance:', updatedUser.balance)
-      console.log('amount being added:', currency(updatedUser.balance).add(
-        money(amountToAdd)))
+      updatedUser.balance = currency(preBalance)
+        .add(money(amountToAdd))
+        .format()
 
-      updatedUser.balance = currency(updatedUser.balance).add(
-        money(amountToAdd)
-      )
-      memory.users = [...oldMemories, updatedUser]
-
-      console.log('updated user balance:', updatedUser.balance)
+      memory.users = memory.users.map(u => {
+        if (u.username === updatedUser.username) {
+          u.balance = updatedUser.balance
+          return u
+        }
+        return u
+      })
 
       const text = `${money(
         amountToAdd
       )} has been added to ${mentionedUser}'s account.`
       const conditional = `user balance`
       carefullyExecute(text, conditional)
-    } else if (currentUserInfoInMemory.accessLevel.match(/(3)/)) {
+    } else if (accessLevelIs(currentUserInfoInMemory, 3)) {
+      revokeResponse(currentUser)
+    }
+  }
+
+  // deduct money from user's account
+  if (
+    checkIfUserIsReferenced(currentComment) &&
+    checkSentenceFor(currentComment, ddm_params)
+  ) {
+    if (accessLevelIs(currentUserInfoInMemory, 0, 1, 2)) {
+      const { balance: preBalance } = mentionedUserInfoInMemory
+
+      const sentenceToArray = currentComment.out('array')
+      const indexOfDeposit = sentenceToArray.indexOf('deduct')
+      const amountToSubtract = sentenceToArray[indexOfDeposit + 1]
+
+      const oldMemories = memory.users
+      let updatedUser = oldMemories.filter(
+        user =>
+          user.username.toLowerCase().trim() ===
+          mentionedUser.toLowerCase().trim()
+      )[0]
+
+      updatedUser.balance = currency(preBalance)
+        .subtract(money(amountToSubtract))
+        .format()
+
+      memory.users = memory.users.map(u => {
+        if (u.username === updatedUser.username) {
+          u.balance = updatedUser.balance
+          return u
+        }
+        return u
+      })
+
+      const text = `${money(
+        amountToSubtract
+      )} has been deducted from ${mentionedUser}'s account.`
+      const conditional = `deduct funds`
+      carefullyExecute(text, conditional)
+    } else if (accessLevelIs(currentUserInfoInMemory, 3)) {
       revokeResponse(currentUser)
     }
   }
@@ -817,7 +922,7 @@ const respondToComment = async (subjectivity, polarity, score) => {
       const conditional = `get time`
       carefullyExecute(text, conditional)
     } else {
-      if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
+      if (accessLevelIs(currentUserInfoInMemory, 0, 1, 2)) {
         console.log(currentComment.out('tags').map(obj => obj.tags))
         const time = new Date()
         const text = `${currentUser}, the time is ${time.timeNow()}.`
@@ -837,7 +942,7 @@ const respondToComment = async (subjectivity, polarity, score) => {
       const conditional = `get date`
       carefullyExecute(text, conditional)
     } else {
-      if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
+      if (accessLevelIs(currentUserInfoInMemory, 0, 1, 2)) {
         const text = `${currentUser}, the date is ${time.dateNow}.`
         const conditional = `get date`
         carefullyExecute(text, conditional)
@@ -849,7 +954,7 @@ const respondToComment = async (subjectivity, polarity, score) => {
 
   // get total people in lobby
   if (checkSentenceFor(currentComment, tp_params)) {
-    if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
+    if (accessLevelIs(currentUserInfoInMemory, 0, 1, 2)) {
       const text = `There are currently ${
         memory.numberOfUsers
       } users in this room.`
@@ -865,7 +970,7 @@ const respondToComment = async (subjectivity, polarity, score) => {
     checkIfUserIsReferenced(currentComment) &&
     checkSentenceFor(currentComment, ru_params)
   ) {
-    if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
+    if (accessLevelIs(currentUserInfoInMemory, 0, 1, 2)) {
       const data = await roast()
       const { roasts } = data
       const max = roasts.length
@@ -899,7 +1004,6 @@ const respondToComment = async (subjectivity, polarity, score) => {
 
   // make person laugh
   if (checkSentenceFor(currentComment, ml_params)) {
-    console.log('starting joke')
     const data = await laugh()
     const { humor } = data
     const max = humor.length
@@ -988,7 +1092,7 @@ const respondToComment = async (subjectivity, polarity, score) => {
       const conditional = `mock user`
       carefullyExecute(text, conditional)
     } else {
-      if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
+      if (accessLevelIs(currentUserInfoInMemory, 0, 1, 2)) {
         memory.grillSpecificUser = {
           status: true,
           victim: mentionedUser,
@@ -1019,7 +1123,7 @@ const respondToComment = async (subjectivity, polarity, score) => {
         count: 0
       }
     } else {
-      if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
+      if (accessLevelIs(currentUserInfoInMemory, 0, 1, 2)) {
         const text = `I've stopped monitoring ${victim}'s speech patterns ${currentUser}.`
         const conditional = `stop mocking user`
         carefullyExecute(text, conditional)
@@ -1036,7 +1140,7 @@ const respondToComment = async (subjectivity, polarity, score) => {
   }
   // run math calculation
   if (checkSentenceFor(currentComment, mc_params)) {
-    if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
+    if (accessLevelIs(currentUserInfoInMemory, 0, 1, 2)) {
       const comment = currentComment.out('text')
       const expression = comment.split('calculate')[1]
       let result
@@ -1061,7 +1165,7 @@ const respondToComment = async (subjectivity, polarity, score) => {
 
   // on this day
   if (checkSentenceFor(currentComment, hotd_params)) {
-    if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
+    if (accessLevelIs(currentUserInfoInMemory, 0, 1, 2)) {
       const pos = currentComment
         .match('#Verb #Preposition #Determiner #Date')
         .out('text')
@@ -1130,7 +1234,7 @@ const respondToComment = async (subjectivity, polarity, score) => {
 
   // read a poem
   if (checkSentenceFor(currentComment, rp_params)) {
-    if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
+    if (accessLevelIs(currentUserInfoInMemory, 0, 1, 2)) {
       $.getJSON(
         `https://cors-escape.herokuapp.com/https://www.poemist.com/api/v1/randompoems`,
         data => {
@@ -1169,7 +1273,7 @@ const respondToComment = async (subjectivity, polarity, score) => {
 
   // get position of ISS
   if (checkSentenceFor(currentComment, pis_params)) {
-    if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
+    if (accessLevelIs(currentUserInfoInMemory, 0, 1, 2)) {
       $.getJSON(`http://api.open-notify.org/iss-now.json?callback=?`, data => {
         const lat = data['iss_position']['latitude']
         const lon = data['iss_position']['longitude']
@@ -1183,7 +1287,7 @@ const respondToComment = async (subjectivity, polarity, score) => {
 
   // who is on the ISS
   if (checkSentenceFor(currentComment, wis_params)) {
-    if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
+    if (accessLevelIs(currentUserInfoInMemory, 0, 1, 2)) {
       $.getJSON(`http://api.open-notify.org/astros.json?callback=?`, data => {
         const { number, people } = data
         const text = `The ${number} people currently on the ISS are ${people.map(
@@ -1201,7 +1305,7 @@ const respondToComment = async (subjectivity, polarity, score) => {
 
   // give advice
   if (checkSentenceFor(currentComment, ga_params)) {
-    if (accessLevelIs(currentUserInfoInMemory, 1, 2))
+    if (accessLevelIs(currentUserInfoInMemory, 0, 1, 2))
       $.getJSON(
         `https://cors-escape.herokuapp.com/http://api.adviceslip.com/advice`,
         data => writeToChat(`${data.slip.advice}`)
@@ -1212,7 +1316,7 @@ const respondToComment = async (subjectivity, polarity, score) => {
 
   // give advice about x
   if (checkSentenceFor(currentComment, gaa_params)) {
-    if (accessLevelIs(currentUserInfoInMemory, 1, 2)) {
+    if (accessLevelIs(currentUserInfoInMemory, 0, 1, 2)) {
       const sentenceToArray = currentComment.out('text').split(' ')
       const indexOfAbout = sentenceToArray.indexOf('about')
       const query = sentenceToArray[indexOfAbout + 1]
@@ -1274,103 +1378,11 @@ const respondToComment = async (subjectivity, polarity, score) => {
         revokeResponse(currentUser)
       }
     }
-  }
-
-  // MY COMMANDS
-  if (currentUser === memory.self) {
-    // pos mode on
-    if (currentComment.has('POS mode') && currentComment.has('activate')) {
-      state.normalMode = false
-      state.POSMode = true
-      writeToChat('Activating Language Learning Protocol...')
-    }
-
-    // pos mode off
-    if (currentComment.match('POS mode') && currentComment.has('deactivate')) {
-      state.normalMode = true
-      state.POSMode = false
-      writeToChat('As you wish, sir. Deactivating Language Learning Protocol.')
-    }
-
-    // autopilotMode mode on
-    if (
-      (currentComment.has('autopilot') ||
-        currentComment.out('text').match(/i(')?ll be back/gi)) &&
-      currentComment.has('yuri') &&
-      state.normalMode
-    ) {
-      state.normalMode = false
-      state.autopilotMode = true
-      writeToChat(
-        "Understood, sir. I've enabled Autopilot mode. I will inform others while you are away."
-      )
-    }
-
-    // autopilotMode mode off
-    if (
-      currentComment.match('back') &&
-      !currentComment.has('be') &&
-      currentComment.has('yuri') &&
-      state.autopilotMode
-    ) {
-      state.normalMode = true
-      state.autopilotMode = false
-      if (memory.voicemail.length === 0) {
-        writeToChat(
-          `Welcome back, sir. Nobody reached out to you while you were away.`
-        )
-      } else if (memory.voicemail.length === 1) {
-        writeToChat(
-          `Deactivating Autopilot mode. Sir, ${memory.voicemail.join(
-            ' '
-          )} reached out to you.`
-        )
-      } else if (memory.voicemail.length > 1) {
-        writeToChat(
-          `Deactivating Autopilot mode. Sir, ${memory.voicemail
-            .slice(0, -1)
-            .join(', ')}, and ${
-            memory.voicemail[memory.voicemail.length - 1]
-          } reached out to you.`
-        )
-      }
-
-      memory.voicemail = []
-    }
-
-    // turn on sentiment analysis mode
-    if (checkSentenceFor(currentComment, asa_params)) {
-      writeToChat(`Now analyzing user sentiment.`, 2000)
-      setTimeout(() => (state.sentimentMode = true), 2500)
-    }
-
-    // turn off sentiment analysis mode
-    if (checkSentenceFor(currentComment, dsa_params)) {
-      writeToChat(
-        `Deactivating Sentiment Analysis. Sentiments for each user have been recorded sir.`,
-        2000
-      )
-      setTimeout(() => (state.sentimentMode = false), 2500)
-    }
-
-    // battery level
-    if (
-      currentComment.match('/(battery|juice)/').found &&
-      currentComment.has('yuri')
-    ) {
-      writeToChat(`My battery level is at ${state.batteryLevel}% sir.`)
-    }
-
-    // backup battery level
-    if (!!currentComment.out('text').match(/(back(\s)?up|reserve)/i)) {
-      writeToChat(`My reserve capacity is at ${state.reserveBatteryLevel}%.`)
-    }
 
     // promote user
     if (
       checkIfUserIsReferenced(currentComment) &&
-      currentComment.match('level (1|2)').found &&
-      currentComment.has(`promote`)
+      checkSentenceFor(currentComment, pu_params)
     ) {
       const oldMemories = memory.users
       let updatedUser = oldMemories.filter(
@@ -1379,27 +1391,166 @@ const respondToComment = async (subjectivity, polarity, score) => {
           mentionedUser.toLowerCase().trim()
       )[0]
 
-      updatedUser.accessLevel = currentComment
+      if (currentComment.match('level (1|2)'))
+        updatedUser.accessLevel = currentComment
+          .match('level (1|2)')
+          .toTitleCase()
+          .out('text')
+
+      memory.users = [...oldMemories, updatedUser]
+
+      const text = `${mentionedUser} has been promoted. They now have access to ${
+        updatedUser.accessLevel
+      } commands.`
+      writeToChat(text)
+    }
+
+    // demote user
+    if (
+      checkIfUserIsReferenced(currentComment) &&
+      checkSentenceFor(currentComment, du_params)
+    ) {
+      const oldMemories = memory.users
+      let updatedUser = oldMemories.filter(
+        user =>
+          user.username.toLowerCase().trim() ===
+          mentionedUser.toLowerCase().trim()
+      )[0]
+
+      if (currentComment.match('level (2|3)'))
+        updatedUser.accessLevel = currentComment
+          .match('level (2|3)')
+          .toTitleCase()
+          .out('text')
+
+      memory.users = [...oldMemories, updatedUser]
+
+      const text = `${mentionedUser} has been demoted. They retain access to ${
+        updatedUser.accessLevel
+      } commands.`
+      writeToChat(text)
+    }
+  }
+
+  // MY COMMANDS
+  if (currentUser === memory.self) {
+    // pos mode on
+    if (checkSentenceFor(currentComment, apos_params)) {
+      state.normalMode = false
+      state.POSMode = true
+      const text = `Activating Language Learning Protocol.`
+      writeToChat(text)
+    }
+
+    // pos mode off
+    if (checkSentenceFor(currentComment, dpos_params)) {
+      state.normalMode = true
+      state.POSMode = false
+      const text = `As you wish, sir. Deactivating Language Learning Protocol.`
+      writeToChat(text)
+    }
+
+    // autopilotMode mode on
+    if (checkSentenceFor(currentComment, aam_params) && state.normalMode) {
+      state.normalMode = false
+      state.autopilotMode = true
+      const text = `Understood, sir. I've enabled Autopilot mode. I will inform others while you are away.`
+      writeToChat(text)
+    }
+
+    // autopilotMode mode off
+    if (checkSentenceFor(currentComment, dam_params) && state.autopilotMode) {
+      let text
+      state.normalMode = true
+      state.autopilotMode = false
+
+      if (memory.voicemail.length === 0)
+        text = `Welcome back, sir. Nobody reached out to you while you were away.`
+      else if (memory.voicemail.length === 1)
+        text = `Deactivating Autopilot mode. Sir, ${memory.voicemail.join(
+          ' '
+        )} reached out to you.`
+      else if (memory.voicemail.length > 1)
+        text = `Deactivating Autopilot mode. Sir, ${memory.voicemail
+          .slice(0, -1)
+          .join(', ')}, and ${
+          memory.voicemail[memory.voicemail.length - 1]
+        } reached out to you.`
+
+      writeToChat(text)
+      memory.voicemail = []
+    }
+
+    // turn on sentiment analysis mode
+    if (checkSentenceFor(currentComment, asa_params)) {
+      const text = `Now analyzing user sentiment.`
+      writeToChat(text, 2000)
+      setTimeout(() => (state.sentimentMode = true), 2500)
+    }
+
+    // turn off sentiment analysis mode
+    if (checkSentenceFor(currentComment, dsa_params)) {
+      const text = `Deactivating Sentiment Analysis. Sentiments for each user have been recorded sir.`
+      writeToChat(text, 2000)
+      setTimeout(() => (state.sentimentMode = false), 2500)
+    }
+
+    // battery level
+    if (checkSentenceFor(currentComment, bl_params)) {
+      text = `My battery level is at ${state.batteryLevel}% sir.`
+      writeToChat(text)
+    }
+
+    // backup battery level
+    if (checkSentenceFor(currentComment, bbl_params)) {
+      text = `My reserve capacity is at ${state.reserveBatteryLevel}%.`
+      writeToChat(text)
+    }
+
+    // promote all users
+    if (checkSentenceFor(currentComment, pau_params)) {
+      const targetLevel = currentComment
         .match('level (1|2)')
         .toTitleCase()
         .out('text')
-      memory.users = [...oldMemories, updatedUser]
 
-      writeToChat(
-        `${mentionedUser} has been promoted. They now have access to ${
-          updatedUser.accessLevel
-        } commands.`
-      )
+      if (currentComment.match('level (1|2)'))
+        memory.users = memory.users.map(user => {
+          user.accessLevel = targetLevel
+          return user
+        })
+
+      let text
+      try {
+        text = `Sir, I have given all users ${targetLevel} clearance.`
+      } catch (e) {
+        console.log(`An error occurred: ${e}`)
+        text = `Sir, that is not an actionable command.`
+      }
+      writeToChat(text)
     }
 
-    // promote user
-    // if (
-    //   currentComment.not('yuri').match('#Username').found &&
-    //   currentComment.match('Level (1|2)').found &&
-    //   currentComment.has(`promote`)
-    // ) {
-    //   writeToChat(`My reserve capacity is at ${state.reserveBatteryLevel}%.`)
-    // }
+    // demote all users
+    if (checkSentenceFor(currentComment, dau_params)) {
+      const targetLevel = currentComment
+        .match('level (2|3)')
+        .toTitleCase()
+        .out('text')
+      if (currentComment.match('level (2|3)'))
+        memory.users = memory.users.map(user => {
+          user.accessLevel = targetLevel
+          return user
+        })
+
+      let text
+      try {
+        text = `Sir, I have successfully demoted all users to ${targetLevel}.`
+      } catch (e) {
+        console.log(`An error occurred: ${e}`)
+        text = `Sir, that is not an actionable command.`
+      }
+      writeToChat(text)
+    }
   }
 
   // other user commands
@@ -1624,9 +1775,7 @@ updateMemoryOfUsers = () => {
     const username = wrapper.textContent
 
     // get INFORMATION about this user
-    let UserRecord = memory.users.filter(user => user =>
-      user.username === username
-    )[0]
+    let UserRecord = memory.users.filter(user => user.username === username)[0]
 
     // set DEFAULTS for this user
     if (!!UserRecord) UserRecord = UserRecord
@@ -1639,7 +1788,7 @@ updateMemoryOfUsers = () => {
         lastComment: '',
         accessLevel: '',
         accounts: '',
-        funds: '',
+        balance: 0,
         yuriCalls: '',
         yuriStatus: ''
       }
@@ -1661,28 +1810,13 @@ updateMemoryOfUsers = () => {
     if (commentsFilteredByThisUser.length > 0) {
       // set user's FIRST COMMENT
       // and if first comment is empty, then set it
-      if (
-        !!UserRecord.firstComment
-        // memory.users.filter(
-        //   user => user.username === username && user.firstComment === ''
-        // ).length > 0
-      ) {
+      if (!!UserRecord.firstComment)
         firstComment = commentsFilteredByThisUser[0].querySelector(
           '.echat-shared-chat-message-wrapper .echat-shared-chat-message-body'
         ).textContent
-      }
+
       // otherwise keep it the same.
-      if (
-        !!UserRecord.firstComment
-        // memory.users.filter(
-        //   user => user.username === username && user.firstComment !== ''
-        // ).length > 0
-      ) {
-        firstComment = UserRecord.firstComment
-        // firstComment = memory.users.filter(
-        //   user => user.username === username
-        // )[0].firstComment
-      }
+      if (!!UserRecord.firstComment) firstComment = UserRecord.firstComment
 
       // set user's LAST COMMENT
       // the last comment always changes
@@ -1694,30 +1828,15 @@ updateMemoryOfUsers = () => {
 
       // set user's TIME JOINED
       // if no joined time has been assigned to the user, then add it
-      if (
-        !!UserRecord.timeJoined
-        // memory.users.filter(
-        //   user => user.username === username && user.timeJoined === ''
-        // ).length > 0
-      ) {
+      if (!!UserRecord.timeJoined)
         timeJoined = commentsFilteredByThisUser[0]
           .querySelector(
             '.echat-shared-chat-message-wrapper .echat-shared-chat-message-top-wrapper .echat-shared-chat-message-time'
           )
           .textContent.slice(1, -1)
-      }
 
       // else keep the joined time the same
-      if (
-        !!UserRecord.firstComment
-        // memory.users.filter(
-        //   user => user.username === username && user.timeJoined !== ''
-        // ).length > 0
-      ) {
-        timeJoined = UserRecord.timeJoined
-        // timeJoined = memory.users.filter(user => user.username === username)[0]
-        //   .timeJoined
-      }
+      if (!!UserRecord.firstComment) timeJoined = UserRecord.timeJoined
     }
 
     // set user's TOTAL COMMENTS
@@ -1728,11 +1847,10 @@ updateMemoryOfUsers = () => {
     if (!!UserRecord) {
       // if (memory.users.filter(user => user.username === username).length === 0) {
       if (username === memory.self || username === memory.owner)
-        accessLevel = 'Level 1'
+        accessLevel = 'Level 0'
+      else if (UserRecord.accessLevel) accessLevel = UserRecord.accessLevel
       else accessLevel = 'Level 3'
-    } else accessLevel = UserRecord.accessLevel
-    // accessLevel = memory.users.filter(user => user.username === username)[0]
-    //   .accessLevel
+    } else accessLevel = 'Level 3'
 
     // set user's YURI CALL # and YURI COOLDOWN
     let yuriCalls
@@ -1740,15 +1858,18 @@ updateMemoryOfUsers = () => {
       // if (memory.users.filter(user => user.username === username).length === 0) {
       if (username === memory.self || username === memory.owner) yuriCalls = 0
       else yuriCalls = 0
-    } else
-      accessLevel =
-        // accessLevel = memory.users.filter(user => user.username === username)[0]
-        UserRecord.accessLevel.yuriCalls
+    } else accessLevel = UserRecord.accessLevel.yuriCalls
+
+    // console.log('user balance before if: ', UserRecord.balance)
+
+    const balance = UserRecord.balance
+
+    // otherwise keep it the same.
+    if (!!UserRecord.firstComment) firstComment = UserRecord.firstComment
 
     // FUTURE SETTINGS
     let yuriStatus = undefined
     let accounts = []
-    let balance = 0
 
     // and finally return all that to the array
     return {
